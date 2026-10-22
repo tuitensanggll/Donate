@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>Admin - Arikato_EDITZ</title>
+<style>
+  :root{--bg:#0f0f13;--card:#1a1a1f;--line:#2f2f38;--txt:#fff;--mut:#9ca3af;--red:#DA251D;--yel:#FFE600;--ok:#22c55e}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px}
+  main{max-width:720px;margin:0 auto}
+  h1{font-size:1.25rem;margin:0}
+  h2{font-size:1rem;margin:0 0 10px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-top:14px}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .row>*{flex:1 1 140px}
+  input,textarea{width:100%;background:#111827;border:1px solid #374151;border-radius:8px;color:#fff;padding:9px 12px;font:inherit}
+  input:focus,textarea:focus{outline:none;border-color:var(--red)}
+  label.chk{display:flex;align-items:center;gap:8px;color:var(--mut);font-size:.875rem;margin-top:8px}
+  label.chk input{width:auto}
+  button{cursor:pointer;border:1px solid var(--line);background:transparent;color:#fff;border-radius:8px;padding:8px 14px;font:inherit}
+  button:hover{border-color:#6b7280}
+  button:disabled{opacity:.5;cursor:default}
+  button.pri{background:var(--red);border-color:var(--red);font-weight:600}
+  button.pri:hover{background:#b91c1c}
+  button.ok{border-color:var(--ok);color:var(--ok);font-weight:600}
+  button.del{color:#f87171}
+  button:focus-visible,input:focus-visible{outline:2px solid var(--yel);outline-offset:2px}
+  .top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .tabs{display:flex;gap:6px;margin-bottom:10px}
+  .tabs button.on{background:rgba(218,37,29,.18);border-color:var(--red)}
+  ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+  li.it{display:flex;justify-content:space-between;gap:10px;align-items:center;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px 12px}
+  li.it.new{border-color:var(--yel);background:rgba(255,230,0,.07)}
+  li.it .m{min-width:0}
+  li.it .n{font-weight:600;overflow-wrap:anywhere}
+  li.it .s{color:var(--mut);font-size:.8rem;overflow-wrap:anywhere}
+  .act{display:flex;gap:6px;flex-shrink:0}
+  .mut{color:var(--mut);font-size:.8rem}
+  .hidden{display:none!important}
+  .err{color:#f87171;font-size:.85rem;margin-top:6px;min-height:1.2em}
+  .tag{display:inline-block;font-size:.7rem;padding:1px 8px;border-radius:9999px;border:1px solid var(--line);color:var(--mut);margin-left:6px}
+  .tag.y{color:var(--yel);border-color:rgba(255,230,0,.4)}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#6b7280;margin-right:6px}
+  .dot.on{background:var(--ok)}
+  .dot.bad{background:#f87171}
+  textarea{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.78rem}
+</style>
+</head>
+<body>
+<main>
+
+  <!-- Đăng nhập -->
+  <section id="login" class="card" style="margin-top:12vh">
+    <h1>Admin Arikato_EDITZ</h1>
+    <p id="loginHint" class="mut">Đăng nhập bằng tài khoản admin đã tạo trong Firebase.</p>
+    <input id="em" type="email" placeholder="Email" autocomplete="username">
+    <input id="pw" type="password" placeholder="Mật khẩu" autocomplete="current-password" style="margin-top:8px">
+    <div id="loginErr" class="err" role="alert"></div>
+    <button id="loginBtn" class="pri" type="button" style="width:100%">Đăng nhập</button>
+  </section>
+
+  <!-- Trang chính -->
+  <div id="app" class="hidden">
+    <div class="top">
+      <h1>Xác nhận ghi nhận</h1>
+      <button id="logout" type="button">Thoát</button>
+    </div>
+
+    <section class="card">
+      <div class="top">
+        <div><span id="dot" class="dot"></span><span id="status" class="mut">Đang kết nối...</span></div>
+        <button id="notifyBtn" type="button">Bật thông báo</button>
+      </div>
+      <p class="mut" style="margin:8px 0 0">Giữ tab này mở để nhận thông báo (âm báo + thông báo trình duyệt) ngay khi có người ủng hộ.</p>
+    </section>
+
+    <section class="card">
+      <div class="tabs" role="tablist">
+        <button id="tabP" type="button" role="tab">Chờ xác nhận (<span id="cP">0</span>)</button>
+        <button id="tabC" type="button" role="tab">Đã xác nhận (<span id="cC">0</span>)</button>
+      </div>
+      <ul id="list"></ul>
+      <p id="empty" class="mut" style="text-align:center;margin:18px 0">Chưa có mục nào.</p>
+    </section>
+
+    <section class="card">
+      <h2>Thêm thủ công</h2>
+      <p class="mut" style="margin-top:0">Dùng khi ai đó đã chuyển khoản nhưng không bấm xác nhận trên web. Mục này được ghi nhận luôn.</p>
+      <div class="row">
+        <input id="fName" placeholder="ID TikTok" autocomplete="off">
+        <input id="fAmount" placeholder="Số tiền (đ)" inputmode="numeric" autocomplete="off">
+      </div>
+      <input id="fMsg" placeholder="Lời nhắn (tuỳ chọn, tối đa 100 ký tự)" maxlength="100" style="margin-top:8px" autocomplete="off">
+      <label class="chk"><input id="fAnon" type="checkbox"> Ghi nhận ẩn danh</label>
+      <div id="addErr" class="err" role="alert"></div>
+      <button id="addBtn" class="pri" type="button">Thêm &amp; ghi nhận</button>
+    </section>
+
+    <section class="card">
+      <h2>Nhập dữ liệu có sẵn / Sao lưu</h2>
+      <textarea id="imp" rows="4" placeholder="Dán JSON (mảng) hoặc CSV (cột: name, amount, message, date, anonymous) vào đây"></textarea>
+      <div class="row" style="margin-top:8px">
+        <button id="impBtn" type="button">Nhập vào danh sách ghi nhận</button>
+        <button id="dl" type="button">Tải supporters.json (sao lưu)</button>
+      </div>
+      <div id="impMsg" class="mut" style="margin-top:8px;min-height:1.2em"></div>
+    </section>
+
+    <p class="mut" style="text-align:center;margin-top:16px">Dữ liệu lưu trên Firebase. Người ủng hộ ẩn danh sẽ không bị lộ ID trong danh sách công khai.</p>
+  </div>
+</main>
+
+<script>
+/* =====================  CẤU HÌNH — dán thông tin Firebase của bạn  ===================== */
+const FIREBASE = {
+  apiKey: 'AIzaSyDfgm9BheVZ0YFGl5ab2TwrpP16JGSQQtw',        // Project settings > General > Web API Key
+  databaseURL: 'https://donate-tiktok-default-rtdb.asia-southeast1.firebasedatabase.app'    // vd: https://ten-du-an-default-rtdb.asia-southeast1.firebasedatabase.app
+};
+/* ====================================================================================== */
+
+const $ = s => document.querySelector(s);
+const DB = (FIREBASE.databaseURL || '').replace(/\/+$/, '');
+const RT_KEY = 'ari_fb_rt';
+const BASE_TITLE = 'Admin - Arikato_EDITZ';
+const ls = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  del(k) { try { localStorage.removeItem(k); } catch {} }
+};
+const fmt = n => (+n).toLocaleString('vi-VN');
+const localToday = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+/* ---------- Xác thực Firebase (REST) ---------- */
+let idToken = '', expAt = 0;
+function authErr(code) {
+  if (/INVALID_LOGIN_CREDENTIALS|INVALID_PASSWORD|EMAIL_NOT_FOUND|INVALID_EMAIL/.test(code)) return 'Sai email hoặc mật khẩu.';
+  if (/TOO_MANY_ATTEMPTS/.test(code)) return 'Thử quá nhiều lần, hãy đợi một lúc rồi thử lại.';
+  if (/API_KEY/.test(code)) return 'API key không hợp lệ, kiểm tra lại FIREBASE.apiKey.';
+  return 'Không đăng nhập được (' + code + ').';
+}
+function setSession(d, rt) {
+  idToken = d.idToken || d.id_token; expAt = Date.now() + (+(d.expiresIn || d.expires_in) || 3600) * 1000;
+  ls.set(RT_KEY, rt);
+}
+async function signIn(email, pw) {
+  const r = await fetch('https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=' + encodeURIComponent(FIREBASE.apiKey), {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: pw, returnSecureToken: true })
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(authErr((d.error && d.error.message) || r.status));
+  setSession(d, d.refreshToken);
+}
+async function refresh() {
+  const rt = ls.get(RT_KEY); if (!rt) throw new Error('no-session');
+  const r = await fetch('https://securetoken.googleapis.com/v1/token?key=' + encodeURIComponent(FIREBASE.apiKey), {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'grant_type=refresh_token&refresh_token=' + encodeURIComponent(rt)
+  });
+  const d = await r.json();
+  if (!r.ok) { ls.del(RT_KEY); throw new Error('session-expired'); }
+  setSession(d, d.refresh_token);
+}
+async function token() { if (!idToken || Date.now() > expAt - 60000) await refresh(); return idToken; }
+async function db(method, path, body) {
+  const t = await token();
+  const r = await fetch(DB + '/' + path + '.json?auth=' + encodeURIComponent(t), {
+    method, headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined, body: body !== undefined ? JSON.stringify(body) : undefined
+  });
+  if (!r.ok) throw new Error(r.status === 401 ? 'denied' : 'HTTP ' + r.status);
+  return r.json();
+}
+
+/* ---------- Đăng nhập / thoát ---------- */
+function showLogin(msg) {
+  stopStream();
+  $('#login').classList.remove('hidden'); $('#app').classList.add('hidden');
+  $('#pw').value = ''; $('#loginErr').textContent = msg || '';
+  document.title = BASE_TITLE;
+}
+$('#loginBtn').onclick = async () => {
+  const err = $('#loginErr'), btn = $('#loginBtn'); err.textContent = '';
+  if (!FIREBASE.apiKey || !DB) { err.textContent = 'Chưa điền FIREBASE.apiKey / databaseURL ở đầu phần <script> của admin.html.'; return; }
+  const em = $('#em').value.trim(), pw = $('#pw').value;
+  if (!em || !pw) { err.textContent = 'Nhập email và mật khẩu.'; return; }
+  btn.disabled = true;
+  try { await signIn(em, pw); unlockAudio(); enter(); }
+  catch (e) { err.textContent = e.message; }
+  finally { btn.disabled = false; }
+};
+['#em', '#pw'].forEach(s => $(s).addEventListener('keydown', e => { if (e.key === 'Enter') $('#loginBtn').click(); }));
+$('#logout').onclick = () => { ls.del(RT_KEY); idToken = ''; orders = {}; seen = null; showLogin(); };
+
+/* ---------- Âm thanh + thông báo trình duyệt ---------- */
+let ac = null;
+function unlockAudio() {
+  try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); if (ac.state === 'suspended') ac.resume(); } catch {}
+}
+document.addEventListener('pointerdown', unlockAudio);
+function beep() {
+  try {
+    unlockAudio(); if (!ac) return;
+    [880, 1175, 1568].forEach((f, i) => {
+      const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + i * .16;
+      o.type = 'sine'; o.frequency.value = f; o.connect(g); g.connect(ac.destination);
+      g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.3, t + .02); g.gain.exponentialRampToValueAtTime(.0001, t + .28);
+      o.start(t); o.stop(t + .3);
+    });
+  } catch {}
+}
+function syncNotifyBtn() {
+  const b = $('#notifyBtn');
+  if (!('Notification' in window)) { b.textContent = 'Âm báo: thử'; return; }
+  b.textContent = Notification.permission === 'granted' ? 'Thông báo: đã bật (thử)' : Notification.permission === 'denied' ? 'Thông báo bị chặn (thử âm)' : 'Bật thông báo';
+}
+$('#notifyBtn').onclick = async () => {
+  unlockAudio(); beep();
+  if ('Notification' in window && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch {} }
+  syncNotifyBtn();
+};
+function alertNew(list) {
+  beep();
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      const x = list[0];
+      const n = new Notification('Có ủng hộ mới', {
+        body: list.length > 1 ? list.length + ' lượt ủng hộ đang chờ xác nhận' : '@' + x.name + ' · ' + fmt(x.amount) + 'đ',
+        tag: 'ari-new'
+      });
+      n.onclick = () => { window.focus(); n.close(); };
+    } catch {}
+  }
+}
+
+/* ---------- Luồng realtime: /orders (hàng chờ) ---------- */
+let es = null, orders = {}, seen = null, newKeys = new Set(), reconnTimer = null, refreshTimer = null;
+function setStatus(kind, text) { $('#dot').className = 'dot' + (kind ? ' ' + kind : ''); $('#status').textContent = text; }
+function stopStream() { clearTimeout(reconnTimer); clearInterval(refreshTimer); if (es) { es.close(); es = null; } }
+function applyPut(path, data) {
+  if (path === '/') { orders = data && typeof data === 'object' ? data : {}; return; }
+  const seg = path.split('/').filter(Boolean);
+  if (seg.length === 1) { if (data === null) delete orders[seg[0]]; else orders[seg[0]] = data; }
+  else { const o = orders[seg[0]] || (orders[seg[0]] = {}); if (data === null) delete o[seg[1]]; else o[seg[1]] = data; }
+}
+function pendingList() {
+  return Object.entries(orders).filter(([, v]) => v && typeof v === 'object').map(([key, v]) => ({ key, ...v }))
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+}
+function onOrdersChanged() {
+  const list = pendingList(), keys = new Set(list.map(x => x.key));
+  if (seen) {
+    const fresh = list.filter(x => !seen.has(x.key));
+    fresh.forEach(x => newKeys.add(x.key));
+    if (fresh.length) alertNew(fresh);
+  }
+  seen = keys;
+  newKeys.forEach(k => { if (!keys.has(k)) newKeys.delete(k); });
+  draw();
+}
+function connect() {
+  clearTimeout(reconnTimer); if (es) { es.close(); es = null; }
+  token().then(t => {
+    es = new EventSource(DB + '/orders.json?auth=' + encodeURIComponent(t));
+    es.onopen = () => setStatus('on', 'Đang theo dõi ủng hộ mới (realtime)');
+    es.addEventListener('put', e => { try { const d = JSON.parse(e.data); applyPut(d.path, d.data); onOrdersChanged(); } catch {} });
+    es.addEventListener('patch', e => {
+      try { const d = JSON.parse(e.data); Object.entries(d.data || {}).forEach(([k, v]) => applyPut((d.path === '/' ? '' : d.path) + '/' + k, v)); onOrdersChanged(); } catch {}
+    });
+    es.addEventListener('auth_revoked', () => { reconnTimer = setTimeout(connect, 500); });
+    es.addEventListener('cancel', () => { setStatus('bad', 'Không có quyền đọc hàng chờ. Kiểm tra UID trong Rules.'); es.close(); });
+    es.onerror = () => {
+      setStatus('bad', 'Mất kết nối, đang thử lại...');
+      if (es && es.readyState === 2) reconnTimer = setTimeout(connect, 3000);
+    };
+  }).catch(() => showLogin('Phiên đăng nhập đã hết hạn, hãy đăng nhập lại.'));
+}
+
+/* ---------- Danh sách ghi nhận (/supporters) ---------- */
+let supporters = {}, tab = 'P';
+async function loadSupporters() {
+  try { supporters = (await db('GET', 'supporters')) || {}; if (Array.isArray(supporters)) supporters = Object.assign({}, supporters); } catch (e) { supporters = {}; }
+  draw();
+}
+const supList = () => Object.entries(supporters).filter(([, v]) => v && typeof v === 'object').map(([key, v]) => ({ key, ...v }))
+  .sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+// ẩn danh => không lưu ID vào danh sách công khai
+const toEntry = (name, amount, message, date, anonymous) => ({ name: anonymous ? '' : String(name).replace(/^@+/, ''), amount, message: message || '', date: date || localToday(), anonymous: !!anonymous });
+
+/* ---------- Giao diện ---------- */
+function ago(ms) {
+  if (!ms) return '';
+  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  if (s < 60) return 'vừa xong'; if (s < 3600) return Math.floor(s / 60) + ' phút trước';
+  if (s < 86400) return Math.floor(s / 3600) + ' giờ trước'; return Math.floor(s / 86400) + ' ngày trước';
+}
+function btn(text, cls, fn) { const b = document.createElement('button'); b.type = 'button'; b.className = cls || ''; b.textContent = text; b.onclick = async () => { b.disabled = true; try { await fn(); } catch (e) { alert(e.message === 'denied' ? 'Không có quyền ghi. Kiểm tra UID trong Rules.' : 'Có lỗi: ' + e.message); } finally { b.disabled = false; } }; return b; }
+
+function draw() {
+  const P = pendingList(), C = supList();
+  $('#cP').textContent = P.length; $('#cC').textContent = C.length;
+  document.title = P.length ? '(' + P.length + ') Chờ xác nhận - Admin' : BASE_TITLE;
+  $('#tabP').classList.toggle('on', tab === 'P'); $('#tabC').classList.toggle('on', tab === 'C');
+  $('#tabP').setAttribute('aria-selected', tab === 'P'); $('#tabC').setAttribute('aria-selected', tab === 'C');
+  const rows = tab === 'P' ? P : C, ul = $('#list'); ul.innerHTML = '';
+  $('#empty').classList.toggle('hidden', rows.length > 0);
+  rows.forEach(x => {
+    const li = document.createElement('li'); li.className = 'it' + (tab === 'P' && newKeys.has(x.key) ? ' new' : '');
+    const m = document.createElement('div'); m.className = 'm';
+    const n = document.createElement('div'); n.className = 'n';
+    n.textContent = (x.name ? '@' + x.name : (tab === 'C' ? '(ẩn danh)' : '?')) + ' - ' + fmt(x.amount) + 'đ';
+    if (x.anonymous) { const t = document.createElement('span'); t.className = 'tag y'; t.textContent = 'ẩn danh'; n.appendChild(t); }
+    const s = document.createElement('div'); s.className = 's';
+    s.textContent = tab === 'P'
+      ? [x.code ? 'Mã CK: ' + x.code : '', ago(x.createdAt), x.message].filter(Boolean).join(' · ')
+      : [x.date, x.message].filter(Boolean).join(' · ');
+    m.append(n, s);
+    const act = document.createElement('div'); act.className = 'act';
+    if (tab === 'P') {
+      act.appendChild(btn('Xác nhận', 'ok', async () => {
+        await db('PUT', 'supporters/' + x.key, toEntry(x.name, x.amount, x.message, localToday(), x.anonymous));   // key = mã đơn => bấm lại không bị trùng
+        await db('DELETE', 'orders/' + x.key);
+        delete orders[x.key]; newKeys.delete(x.key); seen && seen.delete(x.key);
+        await loadSupporters(); onOrdersChanged();
+      }));
+      act.appendChild(btn('Từ chối', 'del', async () => {
+        if (!confirm('Từ chối và xoá yêu cầu này? (Không ghi vào danh sách)')) return;
+        await db('DELETE', 'orders/' + x.key); delete orders[x.key]; newKeys.delete(x.key); onOrdersChanged();
+      }));
+    } else {
+      act.appendChild(btn('Xoá', 'del', async () => {
+        if (!confirm('Xoá khỏi danh sách ghi nhận?')) return;
+        await db('DELETE', 'supporters/' + x.key); delete supporters[x.key]; draw();
+      }));
+    }
+    li.append(m, act); ul.appendChild(li);
+  });
+}
+$('#tabP').onclick = () => { tab = 'P'; draw(); };
+$('#tabC').onclick = () => { tab = 'C'; loadSupporters(); };
+setInterval(() => { if (!$('#app').classList.contains('hidden') && tab === 'P') draw(); }, 30000);   // cập nhật "x phút trước"
+
+/* ---------- Thêm thủ công ---------- */
+$('#addBtn').onclick = async () => {
+  const name = $('#fName').value.trim().replace(/^@/, ''), amount = +($('#fAmount').value.replace(/[^\d]/g, '')), err = $('#addErr');
+  if (!name) { err.textContent = 'Nhập ID TikTok.'; return; }
+  if (!(amount > 0)) { err.textContent = 'Nhập số tiền hợp lệ.'; return; }
+  err.textContent = '';
+  try {
+    await db('POST', 'supporters', toEntry(name, amount, $('#fMsg').value.trim(), localToday(), $('#fAnon').checked));
+    ['#fName', '#fAmount', '#fMsg'].forEach(s => $(s).value = ''); $('#fAnon').checked = false;
+    tab = 'C'; await loadSupporters(); $('#fName').focus();
+  } catch (e) { err.textContent = 'Không thêm được: ' + (e.message === 'denied' ? 'không có quyền ghi (kiểm tra UID trong Rules).' : e.message); }
+};
+['#fName', '#fAmount', '#fMsg'].forEach(s => $(s).addEventListener('keydown', e => { if (e.key === 'Enter') $('#addBtn').click(); }));
+
+/* ---------- Nhập / sao lưu ---------- */
+function parseCSV(txt) {
+  const rows = []; let row = [], cur = '', q = false;
+  for (let i = 0; i < txt.length; i++) {
+    const c = txt[i];
+    if (q) { if (c === '"') { if (txt[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += c; }
+    else if (c === '"') q = true;
+    else if (c === ',') { row.push(cur); cur = ''; }
+    else if (c === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
+    else if (c !== '\r') cur += c;
+  }
+  if (cur || row.length) { row.push(cur); rows.push(row); }
+  const head = (rows.shift() || []).map(h => h.trim().toLowerCase());
+  return rows.filter(r => r.some(x => x.trim())).map(r => { const o = {}; head.forEach((h, i) => o[h] = (r[i] || '').trim()); return o; });
+}
+$('#impBtn').onclick = async () => {
+  const txt = $('#imp').value.trim(), msg = $('#impMsg');
+  if (!txt) { msg.textContent = 'Hãy dán dữ liệu trước.'; return; }
+  let arr; try { arr = JSON.parse(txt); } catch { arr = parseCSV(txt); }
+  if (!Array.isArray(arr)) { msg.textContent = 'Dữ liệu không đúng định dạng.'; return; }
+  const batch = {}; let n = 0;
+  arr.forEach(o => {
+    const amount = +String(o && o.amount).replace(/[^\d]/g, '');
+    if (!o || !o.name || !(amount > 0)) return;
+    const anon = o.anonymous === true || /^(true|1|x|có|co|yes)$/i.test(String(o.anonymous || ''));
+    batch[uid() + n] = toEntry(o.name, amount, o.message, o.date, anon); n++;
+  });
+  if (!n) { msg.textContent = 'Không có dòng hợp lệ (cần name và amount).'; return; }
+  try { await db('PATCH', 'supporters', batch); $('#imp').value = ''; msg.textContent = 'Đã nhập ' + n + ' mục.'; tab = 'C'; await loadSupporters(); }
+  catch (e) { msg.textContent = 'Lỗi khi nhập: ' + e.message; }
+};
+$('#dl').onclick = async () => {
+  await loadSupporters();
+  const data = supList().map(({ name, amount, message, date, anonymous }) => ({ name, amount, message: message || '', date, anonymous: !!anonymous }));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  a.download = 'supporters.json'; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+
+/* ---------- Khởi động ---------- */
+function enter() {
+  $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
+  tab = 'P'; seen = null; orders = {}; newKeys = new Set(); syncNotifyBtn(); draw();
+  setStatus('', 'Đang kết nối...');
+  connect(); loadSupporters();
+  clearInterval(refreshTimer); refreshTimer = setInterval(connect, 45 * 60 * 1000);   // làm mới token định kỳ
+}
+if (!FIREBASE.apiKey || !DB) showLogin();
+else if (ls.get(RT_KEY)) refresh().then(enter).catch(() => showLogin());
+else showLogin();
+</script>
+</body>
+</html>
