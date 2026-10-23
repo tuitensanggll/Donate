@@ -352,6 +352,19 @@ const store = {
   set(k, v) { try { sessionStorage.setItem(k, JSON.stringify(v)); } catch {} },
   del(k) { try { sessionStorage.removeItem(k); } catch {} }
 };
+function trackAnalyticsEvent(type) {
+  const fb = CONFIG.firebase && CONFIG.firebase.databaseURL;
+  if (!fb) return;
+  fetch(fb.replace(/\/+$/, '') + '/analyticsClicks.json', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type, at: Date.now() }),
+    keepalive: true
+  }).then(res => {
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+  }).catch(e => console.error('[Analytics] Không gửi được sự kiện:', e));
+}
+trackAnalyticsEvent('visit');
 
 /* ---------- Nội dung tĩnh ---------- */
 $('#siteName').textContent = CONFIG.name;
@@ -640,6 +653,7 @@ infoForm.addEventListener('submit', e => {
     createdAt: reuse ? prev.createdAt : Date.now(),
     expiresAt: reuse ? prev.expiresAt : Date.now() + CONFIG.orderMinutes * 60000
   });
+  if (mode === 'donate') trackAnalyticsEvent('donate');
   nav('pay');
 });
 

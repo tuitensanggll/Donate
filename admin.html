@@ -45,6 +45,9 @@
   .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#6b7280;margin-right:6px}
   .dot.on{background:var(--ok)}
   .dot.bad{background:#f87171}
+  .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px}
+  .stat{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:12px}
+  .stat strong{display:block;font-size:1.5rem;line-height:1.2}
   textarea{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.78rem}
 </style>
 </head>
@@ -74,6 +77,19 @@
         <button id="notifyBtn" type="button">Bật thông báo</button>
       </div>
       <p class="mut" style="margin:8px 0 0">Giữ tab này mở để nhận thông báo (âm báo + thông báo trình duyệt) ngay khi có người ủng hộ.</p>
+    </section>
+
+    <section class="card">
+      <div class="top">
+        <h2>Lượt truy cập Donate</h2>
+        <span class="mut"><span id="clickDot" class="dot"></span><span id="clickStatus">Đang kết nối...</span></span>
+      </div>
+      <div class="stats">
+        <div class="stat"><strong id="visitCount">0</strong><span class="mut">Lượt mở trang · hôm nay: <span id="visitToday">0</span></span></div>
+        <div class="stat"><strong id="donateCount">0</strong><span class="mut">Bắt đầu ủng hộ · hôm nay: <span id="donateToday">0</span></span></div>
+      </div>
+      <p id="clickLast" class="mut" style="margin:10px 0 0">Chưa có lượt truy cập.</p>
+      <p class="mut" style="margin:6px 0 0">Để bật tính năng, thêm quyền đọc dành cho admin và quyền tạo sự kiện mới tại <code>/analyticsClicks</code> trong Firebase Realtime Database Rules.</p>
     </section>
 
     <section class="card">
@@ -234,9 +250,14 @@ function alertNew(list) {
 }
 
 /* ---------- Luồng realtime: /orders (hàng chờ) ---------- */
-let es = null, orders = {}, seen = null, newKeys = new Set(), reconnTimer = null, refreshTimer = null;
+let es = null, clickEs = null, orders = {}, analyticsClicks = {}, seen = null, newKeys = new Set(), reconnTimer = null, clickReconnTimer = null, refreshTimer = null;
 function setStatus(kind, text) { $('#dot').className = 'dot' + (kind ? ' ' + kind : ''); $('#status').textContent = text; }
-function stopStream() { clearTimeout(reconnTimer); clearInterval(refreshTimer); if (es) { es.close(); es = null; } }
+function setClickStatus(kind, text) { $('#clickDot').className = 'dot' + (kind ? ' ' + kind : ''); $('#clickStatus').textContent = text; }
+function stopStream() {
+  clearTimeout(reconnTimer); clearTimeout(clickReconnTimer); clearInterval(refreshTimer);
+  if (es) { es.close(); es = null; }
+  if (clickEs) { clickEs.close(); clickEs = null; }
+}
 function applyPut(path, data) {
   if (path === '/') { orders = data && typeof data === 'object' ? data : {}; return; }
   const seg = path.split('/').filter(Boolean);
@@ -274,6 +295,63 @@ function connect() {
       if (es && es.readyState === 2) reconnTimer = setTimeout(connect, 3000);
     };
   }).catch(() => showLogin('Phiên đăng nhập đã hết hạn, hãy đăng nhập lại.'));
+}
+
+/* ---------- Luồng realtime: /analyticsClicks (thống kê truy cập) ---------- */
+function drawAnalytics() {
+  const events = Object.values(analyticsClicks).filter(x => x && typeof x === 'object' && Number.isFinite(+x.at) && +x.at >= 0 && +x.at <= Date.now());
+  const today = localToday();
+  const visits = events.filter(x => x.type === 'visit');
+  const donations = events.filter(x => x.type === 'donate');
+  const countToday = list => list.filter(x => {
+    const date = new Date(+x.at);
+    return new Date(+x.at - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10) === today;
+  }).length;
+  $('#visitCount').textContent = fmt(visits.length);
+  $('#visitToday').textContent = fmt(countToday(visits));
+  $('#donateCount').textContent = fmt(donations.length);
+  $('#donateToday').textContent = fmt(countToday(donations));
+  const latest = events.reduce((max, x) => Math.max(max, +x.at), 0);
+  $('#clickLast').textContent = latest ? 'Lượt truy cập gần nhất: ' + new Date(latest).toLocaleString('vi-VN') : 'Chưa có lượt truy cập.';
+}
+function applyAnalyticsPut(path, data) {
+  if (path === '/') { analyticsClicks = data && typeof data === 'object' ? data : {}; return; }
+  const key = path.split('/').filter(Boolean)[0];
+  if (!key) return;
+  if (data === null) delete analyticsClicks[key]; else analyticsClicks[key] = data;
+}
+function onAnalyticsEvent(type, raw) {
+  try {
+    const d = JSON.parse(raw);
+    if (type === 'put') applyAnalyticsPut(d.path, d.data);
+    else Object.entries(d.data || {}).forEach(([key, value]) => applyAnalyticsPut((d.path === '/' ? '' : d.path) + '/' + key, value));
+    drawAnalytics();
+  } catch (e) {
+    setClickStatus('bad', 'Không đọc được dữ liệu thống kê.');
+    console.error('[Analytics] Không phân tích được sự kiện Firebase:', e);
+  }
+}
+function connectClicks() {
+  clearTimeout(clickReconnTimer);
+  if (clickEs) { clickEs.close(); clickEs = null; }
+  token().then(t => {
+    clickEs = new EventSource(DB + '/analyticsClicks.json?auth=' + encodeURIComponent(t));
+    clickEs.onopen = () => setClickStatus('on', 'Realtime');
+    clickEs.addEventListener('put', e => onAnalyticsEvent('put', e.data));
+    clickEs.addEventListener('patch', e => onAnalyticsEvent('patch', e.data));
+    clickEs.addEventListener('auth_revoked', () => { clickReconnTimer = setTimeout(connectClicks, 500); });
+    clickEs.addEventListener('cancel', () => {
+      setClickStatus('bad', 'Không có quyền đọc /analyticsClicks.');
+      clickEs.close();
+    });
+    clickEs.onerror = () => {
+      setClickStatus('bad', 'Mất kết nối, đang thử lại...');
+      if (clickEs && clickEs.readyState === 2) clickReconnTimer = setTimeout(connectClicks, 3000);
+    };
+  }).catch(e => {
+    setClickStatus('bad', 'Không thể xác thực kết nối thống kê.');
+    console.error('[Analytics] Không lấy được token Firebase:', e);
+  });
 }
 
 /* ---------- Danh sách ghi nhận (/supporters) ---------- */
@@ -399,8 +477,8 @@ function enter() {
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
   tab = 'P'; seen = null; orders = {}; newKeys = new Set(); syncNotifyBtn(); draw();
   setStatus('', 'Đang kết nối...');
-  connect(); loadSupporters();
-  clearInterval(refreshTimer); refreshTimer = setInterval(connect, 45 * 60 * 1000);   // làm mới token định kỳ
+  connect(); connectClicks(); loadSupporters();
+  clearInterval(refreshTimer); refreshTimer = setInterval(() => { connect(); connectClicks(); }, 45 * 60 * 1000);   // làm mới token định kỳ
 }
 if (!FIREBASE.apiKey || !DB) showLogin();
 else if (ls.get(RT_KEY)) refresh().then(enter).catch(() => showLogin());
