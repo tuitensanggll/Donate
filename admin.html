@@ -107,6 +107,16 @@
     </section>
 
     <section class="card">
+      <div class="top">
+        <h2 style="margin:0">Đánh giá của khách</h2>
+        <button id="rvReload" type="button">Tải lại</button>
+      </div>
+      <div class="stats" id="rvStats"></div>
+      <ul id="rvAdminList" style="margin-top:12px"></ul>
+      <p id="rvAdminEmpty" class="mut" style="text-align:center;margin:14px 0">Chưa có đánh giá nào.</p>
+    </section>
+
+    <section class="card">
       <h2>Thêm thủ công</h2>
       <p class="mut" style="margin-top:0">Dùng khi ai đó đã chuyển khoản nhưng không bấm xác nhận trên web. Mục này được ghi nhận luôn.</p>
       <div class="row">
@@ -460,12 +470,40 @@ function stopVisitors() {
   clearInterval(vTimer); live.presence = {}; live.stats = {};
 }
 
+/* ---------- Đánh giá (xem thống kê + xoá spam) ---------- */
+let revs = {};
+async function loadReviews() {
+  try { revs = (await db('GET', 'reviews')) || {}; } catch (e) { $('#rvAdminEmpty').textContent = 'Không tải được đánh giá (' + e.message + ').'; $('#rvAdminEmpty').classList.remove('hidden'); return; }
+  drawReviews();
+}
+function drawReviews() {
+  const list = Object.entries(revs).filter(([, x]) => x && Number.isInteger(x.r) && x.r >= 1 && x.r <= 5).map(([id, x]) => ({ id, ...x })).sort((a, b) => (b.t || 0) - (a.t || 0));
+  const c = [0, 0, 0, 0, 0, 0]; list.forEach(x => c[x.r]++);
+  const avg = list.length ? list.reduce((s, x) => s + x.r, 0) / list.length : 0;
+  const tile = (v, l, big) => `<div class="st${big ? ' big' : ''}"><b>${v}</b><span>${l}</span></div>`;
+  $('#rvStats').innerHTML = tile(avg.toFixed(1).replace('.', ','), 'Điểm trung bình', 1) + tile(fmt(list.length), 'Tổng đánh giá') + [5, 4, 3, 2, 1].map(s => tile(c[s], s + ' sao')).join('');
+  const ul = $('#rvAdminList'); ul.innerHTML = '';
+  $('#rvAdminEmpty').textContent = 'Chưa có đánh giá nào.'; $('#rvAdminEmpty').classList.toggle('hidden', list.length > 0);
+  list.forEach(x => {
+    const li = document.createElement('li'); li.className = 'it';
+    const m = document.createElement('div'); m.className = 'm';
+    const n = document.createElement('div'); n.className = 'n'; n.textContent = (x.n || 'Ẩn danh') + '  ' + '★'.repeat(x.r) + '☆'.repeat(5 - x.r);
+    if (x.v) { const t = document.createElement('span'); t.className = 'tag y'; t.textContent = 'Đã giao dịch'; n.appendChild(t); }
+    const s = document.createElement('div'); s.className = 's'; s.textContent = (x.t ? new Date(x.t).toLocaleString('vi-VN') : '') + (x.c ? ' · ' + x.c : '');
+    m.append(n, s);
+    const a = document.createElement('div'); a.className = 'act';
+    a.appendChild(btn('Xoá', 'del', async () => { if (!confirm('Xoá đánh giá này?')) return; await db('DELETE', 'reviews/' + x.id); delete revs[x.id]; drawReviews(); }));
+    li.append(m, a); ul.appendChild(li);
+  });
+}
+$('#rvReload').onclick = loadReviews;
+
 /* ---------- Khởi động ---------- */
 function enter() {
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
   tab = 'P'; seen = null; orders = {}; newKeys = new Set(); syncNotifyBtn(); draw();
   setStatus('', 'Đang kết nối...');
-  connect(); loadSupporters(); watchVisitors(); drawVisitors();
+  connect(); loadSupporters(); loadReviews(); watchVisitors(); drawVisitors();
   clearInterval(vTimer); vTimer = setInterval(() => { drawVisitors(); if (++vN % 12 === 0) cleanPresence(); }, 10000);
   clearInterval(refreshTimer); refreshTimer = setInterval(() => { connect(); watchVisitors(); }, 45 * 60 * 1000);   // làm mới token định kỳ
 }

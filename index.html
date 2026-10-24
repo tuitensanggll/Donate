@@ -52,6 +52,20 @@ tailwind.config = {
   .tier:hover{border-color:#6b7280;transform:translateY(-1px)}
   .tier[aria-pressed="true"]{border-color:#DA251D;background:rgba(218,37,29,.12);box-shadow:0 0 0 1px #DA251D}
   .sup-row{display:flex;align-items:center;gap:.75rem;padding:.7rem .85rem;border-radius:.8rem;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05)}
+  .rv-stars{position:relative;display:inline-block;font-size:1.05rem;letter-spacing:2px;line-height:1;white-space:nowrap}
+  .rv-stars.sm{font-size:.8rem;letter-spacing:1px}
+  .rv-base{color:#3a3a44}
+  .rv-fill{position:absolute;left:0;top:0;overflow:hidden;white-space:nowrap;color:#FFE600;width:0}
+  .rv-pick{display:flex;gap:.3rem;margin-top:.4rem}
+  .rv-star{font-size:2.1rem;line-height:1;color:#3a3a44;background:none;border:0;padding:.1rem;cursor:pointer;transition:color .15s,transform .15s}
+  .rv-star.on{color:#FFE600}.rv-star:hover{transform:scale(1.12)}
+  .rv-row{display:flex;align-items:center;gap:.5rem;width:100%;font-size:.75rem;color:#9ca3af;padding:2px 4px;border-radius:.4rem;background:none;border:0;cursor:pointer;text-align:left}
+  .rv-row:hover{background:rgba(255,255,255,.04)}
+  .rv-row[aria-pressed="true"]{color:#fff;background:rgba(255,255,255,.08)}
+  .rv-track{flex:1;height:8px;border-radius:9999px;background:rgba(255,255,255,.08);overflow:hidden}
+  .rv-bar{height:100%;border-radius:9999px;background:#FFE600;transition:width .5s ease}
+  .rv-item{padding:.9rem 0;border-bottom:1px solid rgba(255,255,255,.06)}
+  .rv-item:last-child{border-bottom:0}
   h2[tabindex="-1"]:focus{outline:none}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -280,6 +294,7 @@ tailwind.config = {
       <button id="newReq" type="button" class="flex-1 bg-vnred hover:bg-red-700 text-white font-semibold rounded-lg px-4 py-3 transition-colors"><i class="fa-solid fa-plus mr-1" aria-hidden="true"></i> Gửi yêu cầu khác</button>
       <a id="tiktokLink" target="_blank" rel="noopener noreferrer" class="flex-1 border border-gray-700 hover:border-gray-500 rounded-lg px-4 py-3 text-sm font-medium transition-colors"><i class="fa-brands fa-tiktok mr-1" aria-hidden="true"></i> Xem kênh TikTok</a>
     </div>
+    <button id="rateNow" type="button" class="mt-3 w-full border border-vnyellow/40 text-vnyellow hover:bg-vnyellow/10 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors"><i class="fa-solid fa-star mr-1" aria-hidden="true"></i> Đánh giá trải nghiệm của bạn</button>
     <p id="doneThanks" class="text-xs text-gray-500 mt-4"></p>
   </section>
 
@@ -297,6 +312,42 @@ tailwind.config = {
       <p class="text-sm font-medium text-gray-200">Xin chân thành cảm ơn!</p>
       <p class="text-xs text-gray-400 mt-1 leading-relaxed max-w-md mx-auto">Cảm ơn các bạn trong danh sách trên, những người đã có giao dịch được ghi nhận khi đặt video hoặc ủng hộ kênh. Sự đồng hành của các bạn là động lực để Arikato_EDITZ tiếp tục làm ra những nội dung Khoa học - Lịch sử chất lượng hơn mỗi ngày.</p>
     </div>
+  </section>
+
+  <!-- ============ XẾP HẠNG VÀ ĐÁNH GIÁ ============ -->
+  <section id="viewReviews" class="glass-card rounded-2xl p-5 sm:p-6 hidden" aria-labelledby="h-rev">
+    <h2 id="h-rev" class="text-lg font-semibold flex items-center gap-2 mb-4 pb-3 border-b border-gray-800"><i class="fa-solid fa-star text-vnyellow" aria-hidden="true"></i> Xếp hạng và đánh giá</h2>
+    <div class="flex gap-5 items-center">
+      <div class="text-center shrink-0 w-28">
+        <p id="rvAvg" class="text-5xl font-light leading-none">0,0</p>
+        <div id="rvStars" class="rv-stars mt-2" role="img" aria-label="Chưa có đánh giá"><span class="rv-base" aria-hidden="true">★★★★★</span><span class="rv-fill" id="rvFill" aria-hidden="true">★★★★★</span></div>
+        <p id="rvCount" class="text-xs text-gray-400 mt-1">Chưa có đánh giá</p>
+      </div>
+      <div id="rvBars" class="flex-1" role="group" aria-label="Phân bố số sao (bấm để lọc)"></div>
+    </div>
+
+    <div class="mt-5 pt-4 border-t border-gray-800">
+      <p id="rvFormTitle" class="text-sm font-medium text-gray-300">Bạn thấy kênh thế nào?</p>
+      <div id="rvPick" class="rv-pick" role="radiogroup" aria-label="Chọn số sao"></div>
+      <p id="rvPickLbl" class="text-xs text-gray-400 h-4 mt-1"></p>
+      <div id="rvMore" class="hidden space-y-2 mt-3">
+        <input id="rvName" class="field" maxlength="25" autocomplete="off" placeholder="Tên hiển thị (tuỳ chọn, VD: @tiktok_id)" aria-label="Tên hiển thị">
+        <div>
+          <textarea id="rvText" rows="3" maxlength="500" class="field resize-none" placeholder="Chia sẻ cảm nhận của bạn (tuỳ chọn)" aria-label="Nội dung đánh giá"></textarea>
+          <p id="rvTextCount" class="text-[11px] text-gray-500 text-right">0/500</p>
+        </div>
+        <div class="flex gap-2">
+          <button id="rvSubmit" type="button" class="flex-1 bg-vnred hover:bg-red-700 text-white font-semibold rounded-lg px-4 py-2.5 transition-colors">Gửi đánh giá</button>
+          <button id="rvDel" type="button" class="hidden border border-gray-700 hover:border-red-500 text-gray-300 rounded-lg px-4 py-2.5 text-sm">Xoá</button>
+        </div>
+      </div>
+      <p id="rvMsg" class="text-xs text-gray-400 mt-2 min-h-[1rem]" role="status"></p>
+    </div>
+
+    <div id="rvFilter" class="hidden mt-3 text-xs text-gray-400 flex items-center justify-between"><span id="rvFilterTxt"></span><button id="rvClear" type="button" class="text-vnyellow hover:underline">Bỏ lọc</button></div>
+    <ul id="rvList" class="mt-2"></ul>
+    <p id="rvEmpty" class="text-sm text-gray-500 text-center py-6">Chưa có đánh giá nào. Hãy là người đầu tiên!</p>
+    <button id="rvMoreBtn" type="button" class="hidden w-full mt-2 border border-gray-700 hover:border-gray-500 rounded-lg px-4 py-2 text-sm">Xem thêm đánh giá</button>
   </section>
 </main>
 
@@ -784,6 +835,7 @@ async function confirmPaid(auto) {
     }
     await submitOrder(verified);
     store.set('doneOrder', { ...order, verified, doneAt: Date.now() }); store.del('order');
+    try { localStorage.setItem('ari_customer', '1'); } catch {}
     nav('done');
   } catch (err) {
     console.error(err); showToast('Có lỗi khi gửi yêu cầu, vui lòng thử lại', 'error');
@@ -828,7 +880,7 @@ function show(view) {
   Object.entries(ids).forEach(([k, id]) => $('#' + id).classList.toggle('hidden', k !== view));
   const el = $('#' + ids[view]); el.classList.remove('view-in'); void el.offsetWidth; el.classList.add('view-in');
   setStepper({ info: 1, pay: 2, done: 4 }[view]);
-  $('#modeBar').classList.toggle('hidden', view !== 'info'); $('#viewSupporters').classList.toggle('hidden', view === 'pay');
+  $('#modeBar').classList.toggle('hidden', view !== 'info'); $('#viewSupporters').classList.toggle('hidden', view === 'pay'); $('#viewReviews').classList.toggle('hidden', view === 'pay' || !(CONFIG.firebase && CONFIG.firebase.databaseURL));
   document.title = { info: 'Đặt yêu cầu video', pay: 'Thanh toán', done: 'Hoàn tất' }[view] + ' - ' + CONFIG.name;
   try { window.scrollTo(0, 0); } catch {}
   const h = $({ info: '#h-info', pay: '#h-pay', done: '#h-done' }[view]); h && h.focus({ preventScroll: true });
@@ -871,7 +923,168 @@ const Stats = (() => {
   return api;
 })();
 
-buildTiers(); setMode('video'); loadSupporters();
+/* =====================  XẾP HẠNG & ĐÁNH GIÁ (Firebase /reviews)  ===================== */
+const Reviews = (() => {
+  const fb = CONFIG.firebase && CONFIG.firebase.databaseURL, base = fb ? fb.replace(/\/+$/, '') : '';
+  if (!base) return { init() {} };
+  const lsx = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+  // Mỗi trình duyệt = 1 đánh giá (khoá = did). Gửi lại sẽ CẬP NHẬT đánh giá cũ, không cộng thêm.
+  let did = lsx.get('ari_did');
+  if (!/^[a-z0-9]{10,40}$/.test(did || '')) { const a = new Uint8Array(12); crypto.getRandomValues(a); did = 'd' + [...a].map(x => x.toString(16).padStart(2, '0')).join(''); lsx.set('ari_did', did); }
+  const LABELS = ['', 'Rất tệ', 'Tệ', 'Bình thường', 'Tốt', 'Tuyệt vời'];
+  let all = [], pick = 0, filter = 0, shown = 10, loaded = false, busy = false;
+
+  const clean = (id, x) => x && Number.isInteger(x.r) && x.r >= 1 && x.r <= 5 ? { id, r: x.r, n: String(x.n || '').slice(0, 25), c: String(x.c || '').slice(0, 500), t: +x.t || 0, v: x.v === true } : null;
+  const fmtDate = t => { const d = new Date(t); return t && !isNaN(d) ? `${d.getDate()} tháng ${d.getMonth() + 1}, ${d.getFullYear()}` : ''; };
+  const fmtCount = n => n >= 1000 ? (n / 1000).toFixed(1).replace('.', ',').replace(',0', '') + ' N' : String(n);
+  const mine = () => all.find(x => x.id === did);
+  const msg = (t, bad) => { const el = $('#rvMsg'); el.textContent = t || ''; el.className = 'text-xs mt-2 min-h-[1rem] ' + (bad ? 'text-red-400' : 'text-gray-400'); };
+
+  function stats() {
+    const counts = [0, 0, 0, 0, 0, 0]; all.forEach(x => counts[x.r]++);
+    const total = all.length, avg = total ? all.reduce((s, x) => s + x.r, 0) / total : 0;
+    return { counts, total, avg };
+  }
+  function renderSummary() {
+    const { counts, total, avg } = stats();
+    $('#rvAvg').textContent = avg.toFixed(1).replace('.', ',');
+    $('#rvFill').style.width = (avg / 5 * 100) + '%';
+    $('#rvStars').setAttribute('aria-label', total ? `Điểm trung bình ${avg.toFixed(1).replace('.', ',')} trên 5 sao` : 'Chưa có đánh giá');
+    $('#rvCount').textContent = total ? fmtCount(total) + ' lượt đánh giá' : 'Chưa có đánh giá';
+    const box = $('#rvBars'); box.innerHTML = '';
+    for (let s = 5; s >= 1; s--) {
+      const pct = total ? counts[s] / total * 100 : 0;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'rv-row'; b.dataset.star = s;
+      b.setAttribute('aria-pressed', filter === s);
+      b.setAttribute('aria-label', `${s} sao: ${counts[s]} đánh giá (${Math.round(pct)}%)`);
+      b.innerHTML = `<span class="w-3 text-right" aria-hidden="true">${s}</span><span class="rv-track" aria-hidden="true"><span class="rv-bar block" style="width:${pct}%"></span></span><span class="w-7 text-right tabular-nums" aria-hidden="true">${counts[s]}</span>`;
+      box.appendChild(b);
+    }
+  }
+  function renderList() {
+    const list = (filter ? all.filter(x => x.r === filter) : all).slice().sort((a, b) => b.t - a.t);
+    const ul = $('#rvList'); ul.innerHTML = '';
+    $('#rvEmpty').classList.toggle('hidden', list.length > 0 || !loaded);
+    $('#rvEmpty').textContent = filter ? `Chưa có đánh giá ${filter} sao.` : 'Chưa có đánh giá nào. Hãy là người đầu tiên!';
+    $('#rvFilter').classList.toggle('hidden', !filter);
+    $('#rvFilterTxt').textContent = filter ? `Đang lọc: ${filter} sao (${list.length})` : '';
+    list.slice(0, shown).forEach(x => {
+      const name = x.n || 'Ẩn danh', li = document.createElement('li'); li.className = 'rv-item';
+      const hue = [...name].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 0);
+      const head = document.createElement('div'); head.className = 'flex items-center gap-2.5';
+      const av = document.createElement('span'); av.className = 'w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold text-white shrink-0';
+      av.style.background = `hsl(${hue},35%,40%)`; av.textContent = (name.replace(/^@+/, '').charAt(0) || '?').toUpperCase();
+      const nm = document.createElement('span'); nm.className = 'text-sm font-medium truncate'; nm.textContent = name;
+      head.append(av, nm);
+      const tag = (t, cls) => { const s = document.createElement('span'); s.className = 'text-[10px] px-2 py-0.5 rounded-full border shrink-0 ' + cls; s.textContent = t; head.appendChild(s); };
+      if (x.id === did) tag('Bạn', 'border-vnyellow/40 text-vnyellow');
+      if (x.v) tag('Đã giao dịch', 'border-green-500/40 text-green-400');
+      const meta = document.createElement('div'); meta.className = 'flex items-center gap-2 mt-1.5';
+      meta.innerHTML = `<span class="rv-stars sm" role="img" aria-label="${x.r} sao"><span class="rv-base" aria-hidden="true">★★★★★</span><span class="rv-fill" style="width:${x.r * 20}%" aria-hidden="true">★★★★★</span></span>`;
+      const d = document.createElement('span'); d.className = 'text-[11px] text-gray-500'; d.textContent = fmtDate(x.t); meta.appendChild(d);
+      li.append(head, meta);
+      if (x.c) { const p = document.createElement('p'); p.className = 'text-sm text-gray-300 mt-1.5 break-words whitespace-pre-line'; p.textContent = x.c; li.appendChild(p); }
+      ul.appendChild(li);
+    });
+    $('#rvMoreBtn').classList.toggle('hidden', list.length <= shown);
+  }
+  const renderAll = () => { renderSummary(); renderList(); };
+
+  /* ----- form chọn sao ----- */
+  function paint(n) {
+    $$('#rvPick .rv-star').forEach((b, i) => { b.classList.toggle('on', i < n); b.setAttribute('aria-checked', i + 1 === pick); b.tabIndex = (pick ? i + 1 === pick : i === 0) ? 0 : -1; });
+    $('#rvPickLbl').textContent = LABELS[n] || '';
+  }
+  function setPick(n) {
+    pick = n; paint(n);
+    $('#rvMore').classList.toggle('hidden', !n);
+    const m = mine(); $('#rvSubmit').textContent = m ? 'Cập nhật đánh giá' : 'Gửi đánh giá'; $('#rvDel').classList.toggle('hidden', !m);
+    $('#rvFormTitle').textContent = m ? 'Đánh giá của bạn' : 'Bạn thấy kênh thế nào?';
+  }
+  function buildPick() {
+    const box = $('#rvPick');
+    for (let i = 1; i <= 5; i++) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'rv-star'; b.textContent = '★';
+      b.setAttribute('role', 'radio'); b.setAttribute('aria-label', `${i} sao - ${LABELS[i]}`); b.setAttribute('aria-checked', 'false');
+      b.addEventListener('click', () => { setPick(i); msg(''); });
+      b.addEventListener('mouseenter', () => paint(i));
+      b.addEventListener('focus', () => paint(i));
+      b.addEventListener('keydown', e => {
+        const k = e.key; if (!['ArrowRight', 'ArrowUp', 'ArrowLeft', 'ArrowDown'].includes(k)) return;
+        e.preventDefault(); const n = Math.min(5, Math.max(1, (pick || i) + (k === 'ArrowRight' || k === 'ArrowUp' ? 1 : -1)));
+        setPick(n); $$('#rvPick .rv-star')[n - 1].focus();
+      });
+      box.appendChild(b);
+    }
+    box.addEventListener('mouseleave', () => paint(pick));
+    box.addEventListener('focusout', () => paint(pick));
+    paint(0);
+  }
+  function prefill() {
+    const m = mine();
+    if (m) { $('#rvName').value = m.n; $('#rvText').value = m.c; $('#rvTextCount').textContent = m.c.length + '/500'; setPick(m.r); }
+    else if (!$('#rvName').value) { const o = store.get('doneOrder'); $('#rvName').value = lsx.get('ari_rvname') || (o && o.id ? '@' + o.id : ''); }
+  }
+
+  async function load() {
+    try {
+      const r = await fetch(base + '/reviews.json?t=' + Date.now());
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const j = await r.json();
+      all = Object.entries(j || {}).map(([id, x]) => clean(id, x)).filter(Boolean);
+      if (!loaded) { loaded = true; prefill(); }
+      renderAll();
+    } catch (e) { if (!loaded) { $('#rvEmpty').classList.remove('hidden'); $('#rvEmpty').textContent = 'Không tải được đánh giá, vui lòng thử lại sau.'; } }
+  }
+
+  async function submit() {
+    if (busy) return;
+    if (!pick) { msg('Hãy chọn số sao trước nhé.', true); return; }
+    const name = $('#rvName').value.trim(), text = $('#rvText').value.trim();
+    const body = { r: pick, t: Date.now() };
+    if (name) body.n = name.slice(0, 25);
+    if (text) body.c = text.slice(0, 500);
+    if (lsx.get('ari_customer') === '1') body.v = true;
+    busy = true; const btn = $('#rvSubmit'), orig = btn.textContent; btn.disabled = true; btn.textContent = 'Đang gửi...';
+    try {
+      const r = await fetch(base + '/reviews/' + did + '.json', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      lsx.set('ari_rvname', name);
+      const item = clean(did, body), i = all.findIndex(x => x.id === did);
+      if (i >= 0) all[i] = item; else all.push(item);
+      renderAll(); setPick(pick); msg('Cảm ơn bạn đã đánh giá!'); showToast('Đã lưu đánh giá của bạn', 'success');
+    } catch (e) { console.error(e); msg('Không gửi được đánh giá, vui lòng thử lại.', true); }
+    finally { busy = false; btn.disabled = false; btn.textContent = orig; setPick(pick); }
+  }
+  async function remove() {
+    if (busy || !mine() || !confirm('Xoá đánh giá của bạn?')) return;
+    busy = true;
+    try {
+      const r = await fetch(base + '/reviews/' + did + '.json', { method: 'DELETE' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      all = all.filter(x => x.id !== did); $('#rvText').value = ''; $('#rvTextCount').textContent = '0/500';
+      renderAll(); setPick(0); msg('Đã xoá đánh giá của bạn.');
+    } catch (e) { msg('Không xoá được, vui lòng thử lại.', true); }
+    finally { busy = false; }
+  }
+
+  return {
+    init() {
+      buildPick(); renderAll(); load();
+      $('#rvSubmit').onclick = submit; $('#rvDel').onclick = remove;
+      $('#rvText').addEventListener('input', e => $('#rvTextCount').textContent = e.target.value.length + '/500');
+      $('#rvBars').addEventListener('click', e => { const b = e.target.closest('.rv-row'); if (!b) return; const s = +b.dataset.star; filter = filter === s ? 0 : s; shown = 10; renderAll(); });
+      $('#rvClear').onclick = () => { filter = 0; shown = 10; renderAll(); };
+      $('#rvMoreBtn').onclick = () => { shown += 10; renderList(); };
+      setInterval(() => { if (!document.hidden && !busy) load(); }, 60000);
+    }
+  };
+})();
+$('#rateNow').onclick = () => { $('#viewReviews').scrollIntoView({ behavior: 'smooth' }); const b = $('#rvPick .rv-star'); b && b.focus({ preventScroll: true }); };
+const HAS_FB = !!(CONFIG.firebase && CONFIG.firebase.databaseURL);
+$('#rateNow').classList.toggle('hidden', !HAS_FB);
+
+buildTiers(); setMode('video'); loadSupporters(); Reviews.init();
 route();
 Stats.start();
 </script>
