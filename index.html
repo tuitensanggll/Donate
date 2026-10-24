@@ -352,19 +352,6 @@ const store = {
   set(k, v) { try { sessionStorage.setItem(k, JSON.stringify(v)); } catch {} },
   del(k) { try { sessionStorage.removeItem(k); } catch {} }
 };
-function trackAnalyticsEvent(type) {
-  const fb = CONFIG.firebase && CONFIG.firebase.databaseURL;
-  if (!fb) return;
-  fetch(fb.replace(/\/+$/, '') + '/analyticsClicks.json', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type, at: Date.now() }),
-    keepalive: true
-  }).then(res => {
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-  }).catch(e => console.error('[Analytics] Không gửi được sự kiện:', e));
-}
-trackAnalyticsEvent('visit');
 
 /* ---------- Nội dung tĩnh ---------- */
 $('#siteName').textContent = CONFIG.name;
@@ -477,6 +464,7 @@ function setMode(m, keep) {
   updateToPay();
 }
 $$('.mode').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+$('.mode[data-mode="donate"]').addEventListener('click', () => Stats.hit('donateTab'));
 $('#donMsg').addEventListener('input', e => $('#donCount').textContent = e.target.value.length + '/100');
 
 function renderSupporters(list) {
@@ -653,7 +641,7 @@ infoForm.addEventListener('submit', e => {
     createdAt: reuse ? prev.createdAt : Date.now(),
     expiresAt: reuse ? prev.expiresAt : Date.now() + CONFIG.orderMinutes * 60000
   });
-  if (mode === 'donate') trackAnalyticsEvent('donate');
+  Stats.hit('toPay');
   nav('pay');
 });
 
@@ -858,8 +846,34 @@ function route() {
 }
 window.addEventListener('hashchange', route);
 
+/* =====================  THỐNG KÊ TRUY CẬP (realtime cho trang admin)  ===================== */
+const Stats = (() => {
+  const fb = CONFIG.firebase && CONFIG.firebase.databaseURL;
+  const base = fb ? fb.replace(/\/+$/, '') : '';
+  const lsx = { get(k) { try { return localStorage.getItem(k); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+  const day = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  let sid = store.get('sid');
+  const inc = path => fetch(base + '/stats/' + path + '.json', { method: 'PUT', body: JSON.stringify({ '.sv': { increment: 1 } }), keepalive: true }).catch(() => {});
+  const url = () => base + '/presence/' + sid + '.json';
+  const beat = () => { if (!document.hidden) fetch(url(), { method: 'PUT', body: JSON.stringify({ t: Date.now() }) }).catch(() => {}); };
+  const api = {
+    hit(k, noTotal) { if (!base) return; inc('daily/' + day + '/' + k); if (!noTotal) inc('total/' + k); },
+    start() {
+      if (!base) return;
+      if (!sid) { sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); store.set('sid', sid); api.hit('visits'); }   // 1 lượt / phiên
+      if (lsx.get('ari_day') !== day) { lsx.set('ari_day', day); api.hit('people', true); }                                          // 1 người / ngày / trình duyệt
+      beat(); setInterval(beat, 20000);
+      document.addEventListener('visibilitychange', beat);
+      window.addEventListener('pageshow', beat);
+      window.addEventListener('pagehide', () => fetch(url(), { method: 'DELETE', keepalive: true }).catch(() => {}));
+    }
+  };
+  return api;
+})();
+
 buildTiers(); setMode('video'); loadSupporters();
 route();
+Stats.start();
 </script>
 </body>
 </html>
