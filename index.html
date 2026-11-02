@@ -77,6 +77,11 @@ tailwind.config = {
     .hero-side.right{display:block;left:auto;right:0;-webkit-mask-image:linear-gradient(to left,#000 55%,transparent 100%);mask-image:linear-gradient(to left,#000 55%,transparent 100%)}
     .hero-side.right img{object-position:38% center}
   }
+  .lib-item{display:flex;gap:.85rem;align-items:center;padding:.8rem .85rem;border-radius:.9rem;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);transition:border-color .2s}
+  .lib-item:hover{border-color:rgba(218,37,29,.5)}
+  .lib-ico{width:2.6rem;height:2.6rem;border-radius:.7rem;background:rgba(218,37,29,.15);color:#FFE600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .lib-dl{flex-shrink:0;background:#DA251D;color:#fff;font-weight:600;font-size:.8rem;border-radius:.6rem;padding:.55rem .85rem;display:inline-flex;align-items:center;gap:.4rem;transition:background .2s}
+  .lib-dl:hover{background:#b91c1c}
   h2[tabindex="-1"]:focus{outline:none}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -363,6 +368,21 @@ tailwind.config = {
     <p id="rvEmpty" class="text-sm text-gray-500 text-center py-6">Chưa có đánh giá nào. Hãy là người đầu tiên!</p>
     <button id="rvMoreBtn" type="button" class="hidden w-full mt-2 border border-gray-700 hover:border-gray-500 rounded-lg px-4 py-2 text-sm">Xem thêm đánh giá</button>
   </section>
+
+  <!-- ============ THƯ VIỆN TƯ LIỆU ============ -->
+  <section id="viewLibrary" class="glass-card rounded-2xl p-5 sm:p-6 relative overflow-hidden" aria-labelledby="h-lib">
+    <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-vnred to-vnyellow"></div>
+    <div class="flex items-center justify-between gap-3 mb-1">
+      <h2 id="h-lib" class="text-lg font-semibold flex items-center gap-2"><i class="fa-solid fa-film text-vnred" aria-hidden="true"></i> Kho tư liệu tải về</h2>
+      <span id="libStat" class="text-xs text-gray-400"></span>
+    </div>
+    <p class="text-xs text-gray-500 mb-4 pb-3 border-b border-gray-800">Video tư liệu Khoa học - Lịch sử do Arikato_EDITZ tổng hợp. Bấm <b class="text-gray-300">Tải về</b> để lưu video về máy.</p>
+    <label for="libSearch" class="sr-only">Tìm tư liệu</label>
+    <input id="libSearch" type="search" class="field mb-3 hidden" placeholder="Tìm tư liệu theo tên..." autocomplete="off">
+    <ul id="libList" class="space-y-2 max-h-[32rem] overflow-y-auto pr-1"></ul>
+    <p id="libEmpty" class="text-sm text-gray-500 text-center py-6">Chưa có tư liệu nào. Mình sẽ cập nhật sớm!</p>
+    <p class="text-[11px] text-gray-500 mt-4 text-center leading-relaxed"><i class="fa-solid fa-circle-info mr-1" aria-hidden="true"></i>Tư liệu chỉ dùng cho mục đích học tập, tham khảo. Nếu dùng lại trong video của bạn, hãy ghi nguồn <b class="text-gray-400">Arikato_EDITZ</b>.</p>
+  </section>
 </main>
 
 <footer class="w-full text-center text-xs text-gray-600 pb-6 mt-auto">
@@ -403,6 +423,10 @@ const CONFIG = {
   // Thông báo ủng hộ về trang admin + danh sách ghi nhận realtime (Firebase Realtime Database).
   // Dán URL database, ví dụ: 'https://ten-du-an-default-rtdb.asia-southeast1.firebasedatabase.app'. Để trống = tắt.
   firebase: { databaseURL: 'https://donate-tiktok-default-rtdb.asia-southeast1.firebasedatabase.app' },
+  // Kho tư liệu: mỗi mục { title, desc, url, size, duration, date }. url = link tải trực tiếp (R2 / Drive / Mega...). Có thể thêm trực tiếp ở đây
+  // hoặc sửa file library.json cạnh index.html (không cần động vào code).
+  library: [],
+  libraryEndpoint: 'library.json',
   minAmount: 1000,      // số tiền tối thiểu (0 = không yêu cầu)
   orderMinutes: 15       // thời gian giữ đơn ở bước thanh toán
 };
@@ -945,6 +969,7 @@ function route() {
   stopTimers(); order = null;
   const h = location.hash; let view = 'info';
   if (h === '#admin') { openAdmin(); return; }
+  if (h === '#tu-lieu') { show('info'); setTimeout(() => { const l = $('#viewLibrary'); l && l.scrollIntoView({ behavior: 'smooth' }); }, 80); return; }
   const ab = $('#adminBox'); if (ab) ab.classList.add('hidden');
   if (h === HASH.pay) { order = store.get('order'); if (order) { prefillInfo(order); view = 'pay'; } }
   else if (h === HASH.done) { const d = store.get('doneOrder'); if (d) { renderDone(d); view = 'done'; } }
@@ -1143,7 +1168,62 @@ $('#rateNow').onclick = () => { $('#viewReviews').scrollIntoView({ behavior: 'sm
 const HAS_FB = !!(CONFIG.firebase && CONFIG.firebase.databaseURL);
 $('#rateNow').classList.toggle('hidden', !HAS_FB);
 
-buildTiers(); setMode('video'); loadSupporters(); Reviews.init();
+/* ---------- Kho tư liệu tải về ---------- */
+const Library = (() => {
+  let items = [];
+  const safeUrl = u => {
+    try {
+      const x = new URL(String(u || '').trim());
+      if (!/^https?:$/.test(x.protocol)) return '';
+      if (x.hostname === 'drive.google.com') {   // tự đổi link chia sẻ Google Drive thành link tải trực tiếp
+        const id = (x.pathname.match(/\/file\/d\/([\w-]+)/) || [])[1] || x.searchParams.get('id');
+        const fo = (x.pathname.match(/\/folders\/([\w-]+)/) || [])[1];   // thư mục: bỏ /u/N/ (số tài khoản), giữ link công khai
+        if (fo) return 'https://drive.google.com/drive/folders/' + fo;
+        if (id && /^[\w-]+$/.test(id)) return 'https://drive.google.com/uc?export=download&id=' + id;
+      }
+      return x.href;
+    } catch { return ''; }
+  };
+  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  function render() {
+    const q = norm($('#libSearch').value), list = $('#libList');
+    list.textContent = '';
+    const view = items.filter(it => !q || norm(it.title + ' ' + it.desc).includes(q));
+    view.forEach(it => {
+      const li = el('li', 'lib-item');
+      const ico = el('span', 'lib-ico'); ico.innerHTML = '<i class="fa-solid fa-clapperboard" aria-hidden="true"></i>';
+      const m = el('div', 'min-w-0 flex-1');
+      m.append(el('p', 'text-sm font-medium break-words', it.title));
+      if (it.desc) m.append(el('p', 'text-xs text-gray-400 mt-0.5 clamp3 break-words', it.desc));
+      const meta = [it.duration, it.size, it.date].filter(Boolean).join('  •  ');
+      if (meta) m.append(el('p', 'text-[11px] text-gray-500 mt-1', meta));
+      const a = el('a', 'lib-dl'); a.href = it.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.setAttribute('download', '');
+      const isFolder = it.url.includes('/drive/folders/');
+      if (isFolder) a.removeAttribute('download');
+      a.setAttribute('aria-label', (isFolder ? 'Mở thư mục: ' : 'Tải về: ') + it.title);
+      a.innerHTML = isFolder ? '<i class="fa-solid fa-folder-open" aria-hidden="true"></i><span>Mở thư mục</span>' : '<i class="fa-solid fa-download" aria-hidden="true"></i><span>Tải về</span>';
+      li.append(ico, m, a); list.append(li);
+    });
+    $('#libEmpty').classList.toggle('hidden', view.length > 0);
+    $('#libEmpty').textContent = items.length ? 'Không tìm thấy tư liệu phù hợp.' : 'Chưa có tư liệu nào. Mình sẽ cập nhật sớm!';
+    $('#libStat').textContent = items.length ? items.length + ' tư liệu' : '';
+    $('#libSearch').classList.toggle('hidden', items.length < 6);
+  }
+  async function load() {
+    let all = Array.isArray(CONFIG.library) ? CONFIG.library.slice() : [];
+    if (CONFIG.libraryEndpoint) {
+      try { const r = await fetch(CONFIG.libraryEndpoint + '?t=' + Date.now()); if (r.ok) { const j = await r.json(); if (Array.isArray(j)) all = all.concat(j); } } catch {}
+    }
+    items = all.map(it => ({ title: String(it && it.title || '').slice(0, 160), desc: String(it && it.desc || '').slice(0, 300), url: safeUrl(it && it.url),
+      size: String(it && it.size || '').slice(0, 20), duration: String(it && it.duration || '').slice(0, 20), date: String(it && it.date || '').slice(0, 20) }))
+      .filter(it => it.title && it.url);
+    render();
+  }
+  return { init() { $('#libSearch').addEventListener('input', render); render(); load(); } };
+})();
+
+buildTiers(); setMode('video'); loadSupporters(); Reviews.init(); Library.init();
 route();
 Stats.start();
 </script>
