@@ -519,9 +519,8 @@ $('#siteName').textContent = CONFIG.name;
 $('#avatar').src = CONFIG.avatar;
 $('#tiktokLink').href = CONFIG.tiktok;
 $('#year').textContent = new Date().getFullYear();
-$('#bankLabel').textContent = CONFIG.bank.label;
-$('#bankAcc').textContent = fmtAcc(CONFIG.bank.account);
-$('#bankOwner').textContent = CONFIG.bank.owner;
+function applyBank() { $('#bankLabel').textContent = CONFIG.bank.label; $('#bankAcc').textContent = fmtAcc(CONFIG.bank.account); $('#bankOwner').textContent = CONFIG.bank.owner; }
+applyBank();
 $('#momoOwner').textContent = CONFIG.momo.owner;
 $('#momoQr').src = MOMO_QR;
 if (CONFIG.momo.phone) {
@@ -572,12 +571,13 @@ $('#amountLabel').innerHTML = CONFIG.minAmount > 0
   ? `Mức ủng hộ <span class="text-vnred" aria-hidden="true">*</span> <span class="text-xs font-normal text-gray-500">(tối thiểu ${fmtMoney(CONFIG.minAmount)}đ)</span>`
   : 'Mức ủng hộ <span class="text-xs font-normal text-gray-500">(không bắt buộc)</span>';
 
-CONFIG.amounts.forEach(a => {
+function buildChips() { chipsBox.textContent = ''; CONFIG.amounts.forEach(a => {
   const b = document.createElement('button');
   b.type = 'button'; b.dataset.amount = a; b.textContent = fmtMoney(a) + 'đ';
   b.className = 'amt chip'; b.setAttribute('aria-pressed', 'false');
   chipsBox.appendChild(b);
-});
+}); }
+buildChips();
 function selectChip(a) {
   $$('.amt').forEach(b => {
     const on = +b.dataset.amount === a;
@@ -602,6 +602,7 @@ customAmt.addEventListener('input', () => {
 let mode = 'donate';
 const tierLen = a => (CONFIG.tiers.find(t => t.amount === a) || {}).len || '';
 function buildTiers() {
+  $('#tierBox').textContent = '';
   CONFIG.tiers.forEach(t => {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'tier'; b.dataset.amount = t.amount; b.setAttribute('aria-pressed', 'false');
@@ -1321,6 +1322,10 @@ const Library = (() => {
     if (CONFIG.libraryEndpoint) {
       try { const r = await fetch(CONFIG.libraryEndpoint + '?t=' + Date.now()); if (r.ok) { const j = await r.json(); if (Array.isArray(j)) all = all.concat(j); } } catch {}
     }
+    try {   // Kho tư liệu do admin quản lý trên Firebase (/library) được ưu tiên
+      const fb = CONFIG.firebase && CONFIG.firebase.databaseURL;
+      if (fb) { const r = await fetch(fb.replace(/\/+$/, '') + '/library.json?t=' + Date.now()); if (r.ok) { const j = await r.json(); const arr = j && typeof j === 'object' ? Object.values(j).filter(v => v && v.title && v.url) : []; if (arr.length) all = arr.sort((a, b) => String(b.date || '').localeCompare(String(a.date || ''))); } }
+    } catch {}
     if (CONFIG.driveApiKey) {
       const res = [];
       for (const it of all) {
@@ -1338,7 +1343,22 @@ const Library = (() => {
   return { init() { Player.init(); $('#libSearch').addEventListener('input', render); render(); load(); } };
 })();
 
-buildTiers(); setMode('donate'); loadSupporters(); Reviews.init(); Library.init();
+// Cấu hình do admin lưu trên Firebase (/config) ghi đè mặc định trong code
+async function applyRemoteConfig() {
+  const fb = CONFIG.firebase && CONFIG.firebase.databaseURL; if (!fb) return;
+  try {
+    const r = await fetch(fb.replace(/\/+$/, '') + '/config.json?t=' + Date.now()); if (!r.ok) return;
+    const c = await r.json(); if (!c || typeof c !== 'object') return;
+    const b = c.bank;
+    if (b && /^[A-Za-z0-9]{3,12}$/.test(b.bin) && /^\d{6,20}$/.test(b.account) && b.label && b.owner) CONFIG.bank = { bin: b.bin, account: b.account, label: String(b.label).slice(0, 80), owner: String(b.owner).slice(0, 60) };
+    const am = Array.isArray(c.amounts) ? c.amounts.map(Number).filter(v => v >= 1000 && v <= 50000000).slice(0, 8) : [];
+    if (am.length) CONFIG.amounts = am;
+    const ts = Array.isArray(c.tiers) ? c.tiers.filter(t => t && +t.amount >= 1000 && t.len).slice(0, 6).map(t => ({ amount: +t.amount, len: String(t.len).replace(/[<>&"]/g, '').slice(0, 30), badge: t.badge ? String(t.badge).replace(/[<>&"]/g, '').slice(0, 20) : '' })) : [];
+    if (ts.length) CONFIG.tiers = ts;
+    applyBank(); buildChips(); buildTiers(); selectChip(amount); selectTier(amount); updateToPay();
+  } catch {}
+}
+buildTiers(); setMode('donate'); applyRemoteConfig(); loadSupporters(); Reviews.init(); Library.init();
 route();
 Stats.start();
 </script>

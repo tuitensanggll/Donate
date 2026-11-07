@@ -52,6 +52,12 @@
   .st span{color:var(--mut);font-size:.78rem}
   .st.big{border-color:rgba(34,197,94,.5);background:rgba(34,197,94,.08)}
   .st.big b{color:var(--ok)}
+  nav.tabs{flex-wrap:wrap;position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:5}
+  nav.tabs button.on{background:rgba(218,37,29,.18);border-color:var(--red)}
+  .bar{height:10px;border-radius:5px;background:var(--ok);min-width:2px}
+  .mr{display:grid;grid-template-columns:64px 1fr 96px;gap:8px;align-items:center;font-size:.8rem;margin-top:6px}
+  .mr span:last-child{text-align:right}
+  .lbl{display:block;color:var(--mut);font-size:.8rem;margin:10px 0 4px}
 </style>
 </head>
 <body>
@@ -74,6 +80,10 @@
       <button id="logout" type="button">Thoát</button>
     </div>
 
+    <nav class="tabs" id="nav" aria-label="Mục quản trị">
+      <button type="button" data-go="ung">Ủng hộ</button><button type="button" data-go="tk">Thống kê</button><button type="button" data-go="lib">Kho tư liệu</button><button type="button" data-go="cfg">Cấu hình</button><button type="button" data-go="khac">Khác</button>
+    </nav>
+
     <section class="card">
       <div class="top">
         <div><span id="dot" class="dot"></span><span id="status" class="mut">Đang kết nối...</span></div>
@@ -82,7 +92,7 @@
       <p class="mut" style="margin:8px 0 0">Giữ tab này mở để nhận thông báo (âm báo + thông báo trình duyệt) ngay khi có người ủng hộ.</p>
     </section>
 
-    <section class="card">
+    <section class="card" data-p="tk">
       <div class="top">
         <h2 style="margin:0">Lượt truy cập trang donate</h2>
         <div><span id="vDot" class="dot"></span><span id="vStatus" class="mut">Đang kết nối...</span></div>
@@ -97,16 +107,21 @@
       </div>
     </section>
 
-    <section class="card">
+    <section class="card" data-p="ung">
       <div class="tabs" role="tablist">
         <button id="tabP" type="button" role="tab">Chờ xác nhận (<span id="cP">0</span>)</button>
         <button id="tabC" type="button" role="tab">Đã xác nhận (<span id="cC">0</span>)</button>
+      </div>
+      <div class="row" style="margin-bottom:10px">
+        <input id="q" placeholder="Tìm theo ID / lời nhắn" autocomplete="off">
+        <input id="qm" type="month" aria-label="Lọc theo tháng">
+        <button id="csv" type="button">Xuất CSV</button>
       </div>
       <ul id="list"></ul>
       <p id="empty" class="mut" style="text-align:center;margin:18px 0">Chưa có mục nào.</p>
     </section>
 
-    <section class="card">
+    <section class="card" data-p="khac">
       <div class="top">
         <h2 style="margin:0">Đánh giá của khách</h2>
         <button id="rvReload" type="button">Tải lại</button>
@@ -116,7 +131,7 @@
       <p id="rvAdminEmpty" class="mut" style="text-align:center;margin:14px 0">Chưa có đánh giá nào.</p>
     </section>
 
-    <section class="card">
+    <section class="card" data-p="ung">
       <h2>Thêm thủ công</h2>
       <p class="mut" style="margin-top:0">Dùng khi ai đó đã chuyển khoản nhưng không bấm xác nhận trên web. Mục này được ghi nhận luôn.</p>
       <div class="row">
@@ -129,7 +144,7 @@
       <button id="addBtn" class="pri" type="button">Thêm &amp; ghi nhận</button>
     </section>
 
-    <section class="card">
+    <section class="card" data-p="khac">
       <h2>Nhập dữ liệu có sẵn / Sao lưu</h2>
       <textarea id="imp" rows="4" placeholder="Dán JSON (mảng) hoặc CSV (cột: name, amount, message, date, anonymous) vào đây"></textarea>
       <div class="row" style="margin-top:8px">
@@ -137,6 +152,39 @@
         <button id="dl" type="button">Tải supporters.json (sao lưu)</button>
       </div>
       <div id="impMsg" class="mut" style="margin-top:8px;min-height:1.2em"></div>
+    </section>
+
+    
+    <section class="card" data-p="tk">
+      <h2>Thống kê tiền ủng hộ</h2>
+      <div class="stats" id="mStats"></div>
+      <h2 style="margin-top:16px;font-size:.9rem">6 tháng gần nhất</h2><div id="mChart"></div>
+      <h2 style="margin-top:16px;font-size:.9rem">Top người ủng hộ</h2><ul id="mTop"></ul>
+    </section>
+
+    <section class="card" data-p="lib">
+      <h2>Kho tư liệu</h2>
+      <p class="mut" style="margin-top:0">Thêm video bằng link file Google Drive (<code>.../file/d/ID/view</code>), YouTube hoặc link .mp4. Khách bấm Xem là phát ngay trong trang.</p>
+      <input id="lTitle" placeholder="Tiêu đề" maxlength="160" autocomplete="off">
+      <input id="lUrl" placeholder="Link video" style="margin-top:8px" autocomplete="off">
+      <input id="lDesc" placeholder="Mô tả (tuỳ chọn)" maxlength="300" style="margin-top:8px" autocomplete="off">
+      <div class="row" style="margin-top:8px"><input id="lSize" placeholder="Dung lượng (vd 120 MB)"><input id="lDur" placeholder="Thời lượng (vd 4:30)"></div>
+      <div id="lErr" class="err" role="alert"></div>
+      <div class="row"><button id="lSave" class="pri" type="button">Thêm video</button><button id="lCancel" type="button" class="hidden">Huỷ sửa</button><button id="lImport" type="button">Nhập từ library.json</button></div>
+      <ul id="lList" style="margin-top:12px"></ul>
+      <p id="lEmpty" class="mut" style="text-align:center;margin:14px 0">Chưa có video nào (trang đang dùng library.json).</p>
+    </section>
+
+    <section class="card" data-p="cfg">
+      <h2>Cấu hình thanh toán</h2>
+      <p class="mut" style="margin-top:0">Lưu xong, trang khách tự cập nhật, không cần sửa code.</p>
+      <div class="row"><div><label class="lbl" for="cBin">Mã ngân hàng (BIDV, VCB, MB...)</label><input id="cBin"></div><div><label class="lbl" for="cAcc">Số tài khoản</label><input id="cAcc" inputmode="numeric"></div></div>
+      <label class="lbl" for="cLabel">Tên hiển thị ngân hàng</label><input id="cLabel">
+      <label class="lbl" for="cOwner">Chủ tài khoản</label><input id="cOwner">
+      <label class="lbl" for="cAmts">Mức tiền gợi ý mục Ủng hộ (cách nhau dấu phẩy)</label><input id="cAmts">
+      <label class="lbl" for="cTiers">Gói video, mỗi dòng: số tiền | thời lượng | nhãn (tuỳ chọn)</label><textarea id="cTiers" rows="5"></textarea>
+      <div id="cErr" class="err" role="alert"></div>
+      <div class="row"><button id="cSave" class="pri" type="button">Lưu cấu hình</button><button id="cReset" type="button">Khôi phục mặc định</button></div>
     </section>
 
     <p class="mut" style="text-align:center;margin-top:16px">Dữ liệu lưu trên Firebase. Người ủng hộ ẩn danh sẽ không bị lộ ID trong danh sách công khai.</p>
@@ -162,6 +210,7 @@ const ls = {
 };
 const fmt = n => (+n).toLocaleString('vi-VN');
 const localToday = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+const $$ = s => [...document.querySelectorAll(s)];
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
 /* ---------- Xác thực Firebase (REST) ---------- */
@@ -333,7 +382,7 @@ function draw() {
   document.title = P.length ? '(' + P.length + ') Chờ xác nhận - Admin' : BASE_TITLE;
   $('#tabP').classList.toggle('on', tab === 'P'); $('#tabC').classList.toggle('on', tab === 'C');
   $('#tabP').setAttribute('aria-selected', tab === 'P'); $('#tabC').setAttribute('aria-selected', tab === 'C');
-  const rows = tab === 'P' ? P : C, ul = $('#list'); ul.innerHTML = '';
+  const rows = filt(tab === 'P' ? P : C), ul = $('#list'); ul.innerHTML = '';
   $('#empty').classList.toggle('hidden', rows.length > 0);
   rows.forEach(x => {
     const li = document.createElement('li'); li.className = 'it' + (tab === 'P' && newKeys.has(x.key) ? ' new' : '');
@@ -359,6 +408,15 @@ function draw() {
         await db('DELETE', 'orders/' + x.key); delete orders[x.key]; newKeys.delete(x.key); onOrdersChanged();
       }));
     } else {
+      act.appendChild(btn('Sửa', '', async () => {
+        const nm = prompt('ID TikTok (để trống = ẩn danh)', x.name || ''); if (nm === null) return;
+        const am = prompt('Số tiền (đ)', x.amount); if (am === null) return;
+        const a = +String(am).replace(/[^\d]/g, ''); if (!(a > 0)) { alert('Số tiền không hợp lệ'); return; }
+        const ms = prompt('Lời nhắn', x.message || ''); if (ms === null) return;
+        const dt = prompt('Ngày (YYYY-MM-DD)', x.date || localToday()); if (dt === null) return;
+        const e = toEntry(nm.trim(), a, ms.slice(0, 100), /^\d{4}-\d{2}-\d{2}$/.test(dt) ? dt : x.date, !nm.trim());
+        await db('PUT', 'supporters/' + x.key, e); supporters[x.key] = e; draw();
+      }));
       act.appendChild(btn('Xoá', 'del', async () => {
         if (!confirm('Xoá khỏi danh sách ghi nhận?')) return;
         await db('DELETE', 'supporters/' + x.key); delete supporters[x.key]; draw();
@@ -366,6 +424,34 @@ function draw() {
     }
     li.append(m, act); ul.appendChild(li);
   });
+  drawMoney();
+}
+function filt(rows) {
+  const q = $('#q').value.trim().toLowerCase().replace(/^@/, ''), mo = $('#qm').value;
+  return rows.filter(x => (!q || (String(x.name || '') + ' ' + String(x.message || '') + ' ' + String(x.code || '')).toLowerCase().includes(q)) && (!mo || String(x.date || (x.createdAt ? new Date(x.createdAt - new Date().getTimezoneOffset() * 60000).toISOString() : '')).startsWith(mo)));
+}
+['#q', '#qm'].forEach(k => $(k).addEventListener('input', draw));
+$('#csv').onclick = async () => {
+  await loadSupporters();
+  const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const rows = [['name', 'amount', 'message', 'date', 'anonymous']].concat(supList().map(x => [x.name || '', x.amount, x.message || '', x.date || '', x.anonymous ? 'true' : 'false']));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff' + rows.map(r => r.map(q).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+  a.download = 'ung-ho.csv'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+function drawMoney() {
+  const C = supList(), sum = a => a.reduce((t, x) => t + (+x.amount || 0), 0), today = localToday(), mo = today.slice(0, 7);
+  const tile = (v, l, big) => `<div class="st${big ? ' big' : ''}"><b>${v}</b><span>${l}</span></div>`;
+  $('#mStats').innerHTML = tile(fmt(sum(C)) + 'đ', 'Tổng đã ghi nhận', 1) + tile(fmt(C.length), 'Số lượt ủng hộ') + tile(fmt(C.length ? Math.round(sum(C) / C.length) : 0) + 'đ', 'Trung bình / lượt')
+    + tile(fmt(sum(C.filter(x => String(x.date).startsWith(mo)))) + 'đ', 'Tháng này') + tile(fmt(sum(C.filter(x => x.date === today))) + 'đ', 'Hôm nay');
+  const ms = [], d = new Date(); d.setDate(1);
+  for (let i = 0; i < 6; i++) { ms.unshift(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 7)); d.setMonth(d.getMonth() - 1); }
+  const vals = ms.map(k => sum(C.filter(x => String(x.date).startsWith(k)))), mx = Math.max(1, ...vals);
+  $('#mChart').innerHTML = ms.map((k, i) => `<div class="mr"><span>${k.slice(5)}/${k.slice(0, 4)}</span><div><div class="bar" style="width:${Math.round(vals[i] / mx * 100)}%"></div></div><span>${fmt(vals[i])}đ</span></div>`).join('');
+  const by = {}; C.forEach(x => { if (!x.name) return; const k = String(x.name).toLowerCase(); (by[k] = by[k] || { n: x.name, t: 0, c: 0 }); by[k].t += +x.amount || 0; by[k].c++; });
+  const top = Object.values(by).sort((a, b) => b.t - a.t).slice(0, 5), ul = $('#mTop'); ul.innerHTML = '';
+  top.forEach((u, i) => { const li = document.createElement('li'); li.className = 'it'; li.innerHTML = '<div class="m"><div class="n"></div><div class="s"></div></div>'; li.querySelector('.n').textContent = (i + 1) + '. @' + u.n; li.querySelector('.s').textContent = fmt(u.t) + 'đ · ' + u.c + ' lượt'; ul.appendChild(li); });
+  if (!top.length) ul.innerHTML = '<li class="mut">Chưa có dữ liệu.</li>';
 }
 $('#tabP').onclick = () => { tab = 'P'; draw(); };
 $('#tabC').onclick = () => { tab = 'C'; loadSupporters(); };
@@ -498,12 +584,81 @@ function drawReviews() {
 }
 $('#rvReload').onclick = loadReviews;
 
+/* ---------- Điều hướng mục ---------- */
+function go(p) { ls.set('ari_panel', p); $$('[data-p]').forEach(el => el.classList.toggle('hidden', el.dataset.p !== p)); $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.go === p)); }
+$$('#nav button').forEach(b => b.onclick = () => go(b.dataset.go));
+
+/* ---------- Kho tư liệu (/library) ---------- */
+let lib = {}, lEdit = '';
+async function loadLib() { try { lib = (await db('GET', 'library')) || {}; } catch { lib = {}; } drawLib(); }
+function drawLib() {
+  const list = Object.entries(lib).filter(([, v]) => v && v.title).map(([k, v]) => ({ k, ...v })).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+  const ul = $('#lList'); ul.innerHTML = ''; $('#lEmpty').classList.toggle('hidden', list.length > 0);
+  list.forEach(x => {
+    const li = document.createElement('li'); li.className = 'it'; const m = document.createElement('div'); m.className = 'm';
+    const n = document.createElement('div'); n.className = 'n'; n.textContent = x.title;
+    const s = document.createElement('div'); s.className = 's'; s.textContent = [x.duration, x.size, x.date, x.url].filter(Boolean).join(' · ');
+    m.append(n, s); const a = document.createElement('div'); a.className = 'act';
+    a.appendChild(btn('Sửa', '', async () => { lEdit = x.k; $('#lTitle').value = x.title; $('#lUrl').value = x.url || ''; $('#lDesc').value = x.desc || ''; $('#lSize').value = x.size || ''; $('#lDur').value = x.duration || ''; $('#lSave').textContent = 'Lưu thay đổi'; $('#lCancel').classList.remove('hidden'); $('#lTitle').focus(); }));
+    a.appendChild(btn('Xoá', 'del', async () => { if (!confirm('Xoá video này khỏi kho?')) return; await db('DELETE', 'library/' + x.k); delete lib[x.k]; drawLib(); }));
+    li.append(m, a); ul.appendChild(li);
+  });
+}
+function libReset() { lEdit = ''; ['#lTitle', '#lUrl', '#lDesc', '#lSize', '#lDur'].forEach(k => $(k).value = ''); $('#lSave').textContent = 'Thêm video'; $('#lCancel').classList.add('hidden'); }
+$('#lCancel').onclick = libReset;
+$('#lSave').onclick = async () => {
+  const t = $('#lTitle').value.trim(), u = $('#lUrl').value.trim(), err = $('#lErr');
+  if (!t) { err.textContent = 'Nhập tiêu đề.'; return; }
+  if (!/^https?:\/\//i.test(u)) { err.textContent = 'Link phải bắt đầu bằng http:// hoặc https://'; return; }
+  err.textContent = '';
+  const e = { title: t, url: u, desc: $('#lDesc').value.trim(), size: $('#lSize').value.trim(), duration: $('#lDur').value.trim(), date: (lib[lEdit] && lib[lEdit].date) || localToday() };
+  try { if (lEdit) { await db('PUT', 'library/' + lEdit, e); lib[lEdit] = e; } else { const r = await db('POST', 'library', e); lib[r.name] = e; } libReset(); drawLib(); }
+  catch (x) { err.textContent = 'Không lưu được: ' + (x.message === 'denied' ? 'không có quyền ghi (cập nhật Rules).' : x.message); }
+};
+$('#lImport').onclick = async () => {
+  try {
+    const arr = await (await fetch('library.json?t=' + Date.now())).json(), have = new Set(Object.values(lib).map(v => v && v.url)), b = {}; let n = 0;
+    arr.forEach(o => { if (o && o.title && /^https?:\/\//i.test(o.url || '') && !have.has(o.url)) { b[uid() + n] = { title: String(o.title), url: o.url, desc: o.desc || '', size: o.size || '', duration: o.duration || '', date: o.date || localToday() }; n++; } });
+    if (n) await db('PATCH', 'library', b);
+    await loadLib(); $('#lErr').textContent = 'Đã nhập ' + n + ' mục từ library.json.';
+  } catch (e) { $('#lErr').textContent = 'Không nhập được: ' + e.message; }
+};
+
+/* ---------- Cấu hình (/config) ---------- */
+const CFG_DEF = { bank: { bin: 'BIDV', label: 'BIDV - PGD Lê Quý Đôn', account: '7610702084', owner: 'VO THANH SANG' }, amounts: [10000, 20000, 50000, 100000, 200000],
+  tiers: [{ amount: 20000, len: '30 giây' }, { amount: 50000, len: '1 phút' }, { amount: 100000, len: '3 phút' }, { amount: 150000, len: 'Dưới 5 phút', badge: 'Tối đa' }] };
+let cfgOld = '';
+function fillCfg(c) {
+  const b = Object.assign({}, CFG_DEF.bank, c.bank || {}); cfgOld = b.account;
+  $('#cBin').value = b.bin; $('#cAcc').value = b.account; $('#cLabel').value = b.label; $('#cOwner').value = b.owner;
+  $('#cAmts').value = (c.amounts || CFG_DEF.amounts).join(', ');
+  $('#cTiers').value = (c.tiers || CFG_DEF.tiers).map(t => [t.amount, t.len, t.badge || ''].join(' | ').replace(/ \| $/, '')).join('\n');
+}
+async function loadCfg() { let c = {}; try { c = (await db('GET', 'config')) || {}; } catch {} fillCfg(c); }
+$('#cSave').onclick = async () => {
+  const err = $('#cErr'), bad = m => { err.textContent = m; };
+  const bin = $('#cBin').value.trim(), acc = $('#cAcc').value.replace(/\s/g, ''), label = $('#cLabel').value.trim(), owner = $('#cOwner').value.trim();
+  if (!/^[A-Za-z0-9]{3,12}$/.test(bin)) return bad('Mã ngân hàng chỉ gồm chữ/số (3-12 ký tự).');
+  if (!/^\d{6,20}$/.test(acc)) return bad('Số tài khoản chỉ gồm 6-20 chữ số.');
+  if (!label || !owner) return bad('Nhập tên ngân hàng và chủ tài khoản.');
+  const amounts = [...new Set($('#cAmts').value.split(/[,\s]+/).map(v => +v.replace(/\D/g, '')).filter(v => v >= 1000))].slice(0, 8);
+  if (!amounts.length) return bad('Nhập ít nhất một mức tiền gợi ý (từ 1.000đ).');
+  const tiers = $('#cTiers').value.split('\n').map(l => l.split('|').map(v => v.trim())).filter(p => p[0]).map(p => ({ amount: +p[0].replace(/\D/g, ''), len: (p[1] || '').replace(/[<>&"]/g, '').slice(0, 30), badge: (p[2] || '').replace(/[<>&"]/g, '').slice(0, 20) }));
+  if (!tiers.length || tiers.length > 6 || tiers.some(t => !(t.amount >= 1000) || !t.len)) return bad('Gói video: tối đa 6 dòng, mỗi dòng "số tiền | thời lượng".');
+  if (acc !== cfgOld && !confirm('Bạn đang đổi số tài khoản nhận tiền thành ' + acc + '. Chắc chắn đúng chưa?')) return;
+  err.textContent = '';
+  try { await db('PUT', 'config', { bank: { bin, account: acc, label, owner }, amounts, tiers: tiers.map(t => t.badge ? t : { amount: t.amount, len: t.len }) }); cfgOld = acc; err.style.color = 'var(--ok)'; err.textContent = 'Đã lưu. Trang khách sẽ dùng cấu hình mới.'; setTimeout(() => err.style.color = '', 4000); }
+  catch (e) { err.textContent = 'Không lưu được: ' + (e.message === 'denied' ? 'không có quyền ghi (cập nhật Rules).' : e.message); }
+};
+$('#cReset').onclick = async () => { if (!confirm('Xoá cấu hình đã lưu và dùng lại mặc định trong code?')) return; try { await db('DELETE', 'config'); fillCfg({}); } catch (e) { $('#cErr').textContent = e.message; } };
+
 /* ---------- Khởi động ---------- */
+
 function enter() {
   $('#login').classList.add('hidden'); $('#app').classList.remove('hidden');
   tab = 'P'; seen = null; orders = {}; newKeys = new Set(); syncNotifyBtn(); draw();
   setStatus('', 'Đang kết nối...');
-  connect(); loadSupporters(); loadReviews(); watchVisitors(); drawVisitors();
+  go(ls.get('ari_panel') || 'ung'); loadLib(); loadCfg(); connect(); loadSupporters(); loadReviews(); watchVisitors(); drawVisitors();
   clearInterval(vTimer); vTimer = setInterval(() => { drawVisitors(); if (++vN % 12 === 0) cleanPresence(); }, 10000);
   clearInterval(refreshTimer); refreshTimer = setInterval(() => { connect(); watchVisitors(); }, 45 * 60 * 1000);   // làm mới token định kỳ
 }
