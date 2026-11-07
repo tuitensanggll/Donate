@@ -82,6 +82,17 @@ tailwind.config = {
   .lib-ico{width:2.6rem;height:2.6rem;border-radius:.7rem;background:rgba(218,37,29,.15);color:#FFE600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
   .lib-dl{flex-shrink:0;background:#DA251D;color:#fff;font-weight:600;font-size:.8rem;border-radius:.6rem;padding:.55rem .85rem;display:inline-flex;align-items:center;gap:.4rem;transition:background .2s}
   .lib-dl:hover{background:#b91c1c}
+  .lib-btns{display:flex;gap:.4rem;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+  .lib-dl.alt{background:transparent;border:1px solid rgba(255,255,255,.18);color:#e5e7eb}
+  .lib-dl.alt:hover{background:rgba(255,255,255,.08)}
+  button.lib-dl{border:0;cursor:pointer}
+  .pl-back{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.86);display:none;align-items:center;justify-content:center;padding:1rem}
+  .pl-back.open{display:flex}
+  .pl-box{width:100%;max-width:60rem;background:#15151b;border:1px solid rgba(255,255,255,.1);border-radius:1rem;overflow:hidden;display:flex;flex-direction:column;max-height:100%}
+  .pl-head{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.7rem .9rem;border-bottom:1px solid rgba(255,255,255,.08)}
+  .pl-stage{position:relative;width:100%;aspect-ratio:16/9;background:#000}
+  .pl-stage.tall{aspect-ratio:auto;height:min(70vh,36rem)}
+  .pl-stage iframe,.pl-stage video{position:absolute;inset:0;width:100%;height:100%;border:0;background:#000}
   h2[tabindex="-1"]:focus{outline:none}
   @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -376,7 +387,7 @@ tailwind.config = {
       <h2 id="h-lib" class="text-lg font-semibold flex items-center gap-2"><i class="fa-solid fa-film text-vnred" aria-hidden="true"></i> Kho tư liệu </h2>
       <span id="libStat" class="text-xs text-gray-400"></span>
     </div>
-    <p class="text-xs text-gray-500 mb-4 pb-3 border-b border-gray-800">Video tư liệu Khoa học - Lịch sử do Arikato_EDITZ tổng hợp. Bấm <b class="text-gray-300">Mở thư mục</b> để tải tư liệu trong Drive.</p>
+    <p class="text-xs text-gray-500 mb-4 pb-3 border-b border-gray-800">Video tư liệu Khoa học - Lịch sử do Arikato_EDITZ tổng hợp. Bấm <b class="text-gray-300">Xem</b> để phát ngay trong trang, hoặc <b class="text-gray-300">Tải</b> để lưu về máy.</p>
     <label for="libSearch" class="sr-only">Tìm tư liệu</label>
     <input id="libSearch" type="search" class="field mb-3 hidden" placeholder="Tìm tư liệu theo tên..." autocomplete="off">
     <ul id="libList" class="space-y-2 max-h-[32rem] overflow-y-auto pr-1"></ul>
@@ -388,6 +399,20 @@ tailwind.config = {
 <footer class="w-full text-center text-xs text-gray-600 pb-6 mt-auto">
   <p>© <span id="year">2026</span> Arikato_EDITZ. Lịch sử là để tự hào.</p>
 </footer>
+
+<!-- TRÌNH PHÁT VIDEO -->
+<div id="player" class="pl-back" role="dialog" aria-modal="true" aria-labelledby="plTitle">
+  <div class="pl-box">
+    <div class="pl-head">
+      <p id="plTitle" class="text-sm font-medium truncate"></p>
+      <div class="flex items-center gap-2 shrink-0">
+        <a id="plOpen" target="_blank" rel="noopener noreferrer" class="text-xs text-gray-400 hover:text-white hidden sm:inline"><i class="fa-solid fa-arrow-up-right-from-square mr-1" aria-hidden="true"></i>Mở tab mới</a>
+        <button id="plClose" type="button" class="w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-700" aria-label="Đóng"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+      </div>
+    </div>
+    <div id="plStage" class="pl-stage"></div>
+  </div>
+</div>
 
 <!-- TOAST -->
 <div id="toast" role="status" aria-live="polite" class="fixed bottom-5 left-1/2 bg-gray-800 border border-gray-700 text-white px-5 py-3 rounded-full shadow-2xl hidden items-center gap-3 z-[60] max-w-[90vw]">
@@ -1179,10 +1204,52 @@ const Library = (() => {
         const id = (x.pathname.match(/\/file\/d\/([\w-]+)/) || [])[1] || x.searchParams.get('id');
         const fo = (x.pathname.match(/\/folders\/([\w-]+)/) || [])[1];   // thư mục: bỏ /u/N/ (số tài khoản), giữ link công khai
         if (fo) return 'https://drive.google.com/drive/folders/' + fo;
-        if (id && /^[\w-]+$/.test(id)) return 'https://drive.google.com/uc?export=download&id=' + id;
+        if (id && /^[\w-]+$/.test(id)) return 'https://drive.google.com/file/d/' + id + '/view';
       }
       return x.href;
     } catch { return ''; }
+  };
+  // Xác định cách phát trong trang: trả về {type, src, dl}
+  const playInfo = u => {
+    try {
+      const x = new URL(u), h = x.hostname.replace(/^www\./, '');
+      if (h === 'drive.google.com') {
+        const fo = (x.pathname.match(/\/folders\/([\w-]+)/) || [])[1];
+        if (fo) return { type: 'folder', src: 'https://drive.google.com/embeddedfolderview?id=' + fo + '#grid' };
+        const id = (x.pathname.match(/\/file\/d\/([\w-]+)/) || [])[1];
+        if (id) return { type: 'iframe', src: 'https://drive.google.com/file/d/' + id + '/preview', dl: 'https://drive.google.com/uc?export=download&id=' + id };
+      }
+      let yt = '';
+      if (h === 'youtu.be') yt = x.pathname.slice(1);
+      else if (h.endsWith('youtube.com')) yt = x.searchParams.get('v') || (x.pathname.match(/\/(?:shorts|embed)\/([\w-]+)/) || [])[1] || '';
+      if (/^[\w-]{6,15}$/.test(yt)) return { type: 'iframe', src: 'https://www.youtube-nocookie.com/embed/' + yt + '?rel=0' };
+      if (/\.(mp4|webm|ogv|mov|m4v)(\?|$)/i.test(x.pathname + x.search)) return { type: 'video', src: x.href, dl: x.href };
+    } catch {}
+    return null;
+  };
+  const Player = {
+    init() {
+      this.box = $('#player'); this.stage = $('#plStage');
+      $('#plClose').onclick = () => this.close();
+      this.box.addEventListener('click', e => { if (e.target === this.box) this.close(); });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape' && this.box.classList.contains('open')) this.close(); });
+    },
+    open(it, info) {
+      this.stage.textContent = '';
+      this.stage.classList.toggle('tall', info.type === 'folder');
+      let node;
+      if (info.type === 'video') { node = document.createElement('video'); node.controls = true; node.autoplay = true; node.playsInline = true; node.preload = 'metadata'; node.src = info.src; }
+      else { node = document.createElement('iframe'); node.src = info.src; node.allow = 'autoplay; fullscreen; picture-in-picture; encrypted-media'; node.allowFullscreen = true; node.referrerPolicy = 'no-referrer'; node.title = it.title; }
+      this.stage.append(node);
+      $('#plTitle').textContent = it.title; $('#plOpen').href = it.url;
+      this.opener = document.activeElement;
+      this.box.classList.add('open'); document.body.style.overflow = 'hidden'; $('#plClose').focus();
+    },
+    close() {
+      this.stage.textContent = '';   // gỡ iframe/video để dừng phát
+      this.box.classList.remove('open'); document.body.style.overflow = '';
+      if (this.opener && this.opener.focus) this.opener.focus();
+    }
   };
   const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -1198,12 +1265,26 @@ const Library = (() => {
       if (it.desc) m.append(el('p', 'text-xs text-gray-400 mt-0.5 clamp3 break-words', it.desc));
       const meta = [it.duration, it.size, it.date].filter(Boolean).join('  •  ');
       if (meta) m.append(el('p', 'text-[11px] text-gray-500 mt-1', meta));
-      const a = el('a', 'lib-dl'); a.href = it.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.setAttribute('download', '');
-      const isFolder = it.url.includes('/drive/folders/');
-      if (isFolder) a.removeAttribute('download');
-      a.setAttribute('aria-label', (isFolder ? 'Mở thư mục: ' : 'Tải về: ') + it.title);
-      a.innerHTML = isFolder ? '<i class="fa-solid fa-folder-open" aria-hidden="true"></i><span>Mở thư mục</span>' : '<i class="fa-solid fa-download" aria-hidden="true"></i><span>Tải về</span>';
-      li.append(ico, m, a); list.append(li);
+      const btns = el('div', 'lib-btns');
+      const info = playInfo(it.url);
+      if (info) {
+        const pb = el('button', 'lib-dl'); pb.type = 'button';
+        pb.setAttribute('aria-label', (info.type === 'folder' ? 'Xem thư mục: ' : 'Xem video: ') + it.title);
+        pb.innerHTML = info.type === 'folder' ? '<i class="fa-solid fa-folder-open" aria-hidden="true"></i><span>Xem thư mục</span>' : '<i class="fa-solid fa-play" aria-hidden="true"></i><span>Xem</span>';
+        pb.onclick = () => Player.open(it, info);
+        btns.append(pb);
+      }
+      if (info && info.dl) {
+        const d = el('a', 'lib-dl alt'); d.href = info.dl; d.target = '_blank'; d.rel = 'noopener noreferrer'; d.setAttribute('download', '');
+        d.setAttribute('aria-label', 'Tải về: ' + it.title);
+        d.innerHTML = '<i class="fa-solid fa-download" aria-hidden="true"></i><span>Tải</span>';
+        btns.append(d);
+      } else if (!info) {
+        const a = el('a', 'lib-dl'); a.href = it.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        a.innerHTML = '<i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i><span>Mở link</span>';
+        btns.append(a);
+      }
+      li.append(ico, m, btns); list.append(li);
     });
     $('#libEmpty').classList.toggle('hidden', view.length > 0);
     $('#libEmpty').textContent = items.length ? 'Không tìm thấy tư liệu phù hợp.' : 'Chưa có tư liệu nào. Mình sẽ cập nhật sớm!';
@@ -1220,7 +1301,7 @@ const Library = (() => {
       .filter(it => it.title && it.url);
     render();
   }
-  return { init() { $('#libSearch').addEventListener('input', render); render(); load(); } };
+  return { init() { Player.init(); $('#libSearch').addEventListener('input', render); render(); load(); } };
 })();
 
 buildTiers(); setMode('video'); loadSupporters(); Reviews.init(); Library.init();
