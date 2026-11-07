@@ -133,8 +133,8 @@ tailwind.config = {
   </nav>
 
   <div id="modeBar" class="seg" role="tablist" aria-label="Hình thức">
-    <button type="button" role="tab" class="mode seg-btn on" data-mode="video" aria-selected="true"><i class="fa-solid fa-clapperboard mr-1.5" aria-hidden="true"></i>Đặt video theo yêu cầu</button>
-    <button type="button" role="tab" class="mode seg-btn" data-mode="donate" aria-selected="false"><i class="fa-solid fa-heart mr-1.5" aria-hidden="true"></i>Ủng hộ kênh</button>
+    <button type="button" role="tab" class="mode seg-btn on" data-mode="donate" aria-selected="true"><i class="fa-solid fa-heart mr-1.5" aria-hidden="true"></i>Ủng hộ kênh</button>
+    <button type="button" role="tab" class="mode seg-btn" data-mode="video" aria-selected="false"><i class="fa-solid fa-clapperboard mr-1.5" aria-hidden="true"></i>Đặt video theo yêu cầu</button>
   </div>
 
   <!-- ============ BƯỚC 1: THÔNG TIN ============ -->
@@ -452,6 +452,10 @@ const CONFIG = {
   // hoặc sửa file library.json cạnh index.html (không cần động vào code).
   library: [],
   libraryEndpoint: 'library.json',
+  // API key Google Drive (miễn phí). Điền vào để thư mục Drive tự hiện từng video và phát ngay trong trang.
+  // Cách lấy: console.cloud.google.com > tạo project > bật "Google Drive API" > Credentials > Create API key.
+  // Nên giới hạn key theo tên miền web của bạn. Thư mục Drive phải để "Bất kỳ ai có đường liên kết".
+  driveApiKey: '',
   minAmount: 1000,      // số tiền tối thiểu (0 = không yêu cầu)
   orderMinutes: 15       // thời gian giữ đơn ở bước thanh toán
 };
@@ -595,7 +599,7 @@ customAmt.addEventListener('input', () => {
   selectChip(-1); setErr('customAmount', ''); updateToPay();
 });
 
-let mode = 'video';
+let mode = 'donate';
 const tierLen = a => (CONFIG.tiers.find(t => t.amount === a) || {}).len || '';
 function buildTiers() {
   CONFIG.tiers.forEach(t => {
@@ -780,7 +784,7 @@ function genCode(pre) {
   a.forEach(x => s += chars[x % chars.length]);
   return (pre || 'YC') + s;
 }
-const makeNote = (code, id) => (code + ' ' + id).slice(0, 50);   // nội dung CK luôn có mã + ID
+const makeNote = (code, id) => (code + ' ' + String(id).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]/g, '')).trim().slice(0, 50);   // chỉ chữ+số, tránh app ngân hàng từ chối ký tự lạ (_ . @ dấu)   // nội dung CK luôn có mã + ID
 
 infoForm.addEventListener('submit', e => {
   e.preventDefault();
@@ -1291,10 +1295,40 @@ const Library = (() => {
     $('#libStat').textContent = items.length ? items.length + ' tư liệu' : '';
     $('#libSearch').classList.toggle('hidden', items.length < 6);
   }
+  const fmtSize = b => { b = +b; if (!b) return ''; return b >= 1073741824 ? (b / 1073741824).toFixed(1) + ' GB' : Math.max(1, Math.round(b / 1048576)) + ' MB'; };
+  const fmtDur = ms => { ms = +ms; if (!ms) return ''; const t = Math.round(ms / 1000), h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = t % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0'); };
+  // Liệt kê video trong thư mục Drive công khai (cần CONFIG.driveApiKey). Lỗi thì trả null để giữ mục thư mục gốc.
+  async function expandFolder(id, depth) {
+    const out = []; let token = '';
+    try {
+      do {
+        const q = encodeURIComponent("'" + id + "' in parents and trashed=false");
+        const f = encodeURIComponent('nextPageToken,files(id,name,mimeType,size,modifiedTime,videoMediaMetadata(durationMillis))');
+        const r = await fetch('https://www.googleapis.com/drive/v3/files?q=' + q + '&fields=' + f + '&pageSize=200&orderBy=name&supportsAllDrives=true&includeItemsFromAllDrives=true&key=' + encodeURIComponent(CONFIG.driveApiKey) + (token ? '&pageToken=' + encodeURIComponent(token) : ''));
+        if (!r.ok) return null;
+        const j = await r.json(); token = j.nextPageToken || '';
+        for (const f of j.files || []) {
+          if ((f.mimeType || '').startsWith('video/')) out.push({ title: f.name.replace(/\.[a-z0-9]{2,4}$/i, ''), desc: '', url: 'https://drive.google.com/file/d/' + f.id + '/view',
+            size: fmtSize(f.size), duration: fmtDur(f.videoMediaMetadata && f.videoMediaMetadata.durationMillis), date: (f.modifiedTime || '').slice(0, 10) });
+          else if (f.mimeType === 'application/vnd.google-apps.folder' && depth < 2) { const sub = await expandFolder(f.id, depth + 1); if (sub) out.push(...sub); }
+        }
+      } while (token);
+    } catch { return null; }
+    return out;
+  }
   async function load() {
     let all = Array.isArray(CONFIG.library) ? CONFIG.library.slice() : [];
     if (CONFIG.libraryEndpoint) {
       try { const r = await fetch(CONFIG.libraryEndpoint + '?t=' + Date.now()); if (r.ok) { const j = await r.json(); if (Array.isArray(j)) all = all.concat(j); } } catch {}
+    }
+    if (CONFIG.driveApiKey) {
+      const res = [];
+      for (const it of all) {
+        const fid = (String(it && it.url || '').match(/drive\.google\.com\/drive\/(?:u\/\d+\/)?folders\/([\w-]+)/) || [])[1];
+        const sub = fid ? await expandFolder(fid, 0) : null;
+        if (sub && sub.length) res.push(...sub); else res.push(it);
+      }
+      all = res;
     }
     items = all.map(it => ({ title: String(it && it.title || '').slice(0, 160), desc: String(it && it.desc || '').slice(0, 300), url: safeUrl(it && it.url),
       size: String(it && it.size || '').slice(0, 20), duration: String(it && it.duration || '').slice(0, 20), date: String(it && it.date || '').slice(0, 20) }))
@@ -1304,7 +1338,7 @@ const Library = (() => {
   return { init() { Player.init(); $('#libSearch').addEventListener('input', render); render(); load(); } };
 })();
 
-buildTiers(); setMode('video'); loadSupporters(); Reviews.init(); Library.init();
+buildTiers(); setMode('donate'); loadSupporters(); Reviews.init(); Library.init();
 route();
 Stats.start();
 </script>
