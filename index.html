@@ -774,7 +774,7 @@ function validateInfo() {
   } else checks.push(['customAmount', amountProblem()]);
   checks.forEach(([id, msg]) => setErr(id, msg));
   const bad = checks.find(c => c[1]);
-  if (bad) { $('#' + bad[0]).focus(); return false; }
+  if (bad) { Activity.log('invalid', bad[0]); $('#' + bad[0]).focus(); return false; }
   return true;
 }
 
@@ -803,6 +803,7 @@ infoForm.addEventListener('submit', e => {
     expiresAt: reuse ? prev.expiresAt : Date.now() + CONFIG.orderMinutes * 60000
   });
   Stats.hit('toPay');
+  Activity.log('topay', (mode === 'donate' ? 'Ủng hộ ' : 'Video ') + fmtMoney(amount) + 'đ');
   nav('pay');
 });
 
@@ -885,6 +886,7 @@ function tick() {
   const left = Math.max(0, order.expiresAt - Date.now());
   $('#countdown').textContent = String(Math.floor(left / 60000)).padStart(2, '0') + ':' + String(Math.floor(left % 60000 / 1000)).padStart(2, '0');
   const expired = left === 0, body = $('#payBody');
+  if (expired) Activity.log('expired');
   $('#expiredBox').classList.toggle('hidden', !expired);
   body.classList.toggle('opacity-40', expired); body.inert = expired;
 }
@@ -946,6 +948,7 @@ async function confirmPaid(auto) {
     await submitOrder(verified);
     store.set('doneOrder', { ...order, verified, doneAt: Date.now() }); store.del('order');
     try { localStorage.setItem('ari_customer', '1'); } catch {}
+    Activity.log('submitted', (order.type === 'donate' ? 'Ủng hộ ' : 'Video ') + fmtMoney(order.amount) + 'đ · ' + (verified ? 'đã xác minh' : 'tự xác nhận'));
     nav('done');
   } catch (err) {
     console.error(err); showToast('Có lỗi khi gửi yêu cầu, vui lòng thử lại', 'error');
@@ -986,6 +989,7 @@ function setStepper(n) {   // n = 1..3, n = 4 là đã hoàn tất tất cả
   });
 }
 function show(view) {
+  Activity.log('view', view);
   const ids = { info: 'viewInfo', pay: 'viewPay', done: 'viewDone' };
   Object.entries(ids).forEach(([k, id]) => $('#' + id).classList.toggle('hidden', k !== view));
   const el = $('#' + ids[view]); el.classList.remove('view-in'); void el.offsetWidth; el.classList.add('view-in');
@@ -1032,6 +1036,99 @@ const Stats = (() => {
     }
   };
   return api;
+})();
+
+/* =====================  NHẬT KÝ HOẠT ĐỘNG (hiện ở tab "Hoạt động" của admin)  =====================
+   Chỉ ghi HÀNH ĐỘNG (bấm gì, sang bước nào). KHÔNG ghi nội dung khách gõ, không ghi IP.
+   Trình duyệt đã đăng nhập admin (cờ ari_owner) sẽ không bị ghi. */
+const Activity = (() => {
+  const fb = CONFIG.firebase && CONFIG.firebase.databaseURL;
+  const base = fb ? fb.replace(/\/+$/, '') : '';
+  let owner = false; try { owner = localStorage.getItem('ari_owner') === '1'; } catch {}
+  if (!base || owner || navigator.webdriver) return { start() {}, log() {} };
+
+  const MAX = 150, t0 = Date.now();          // tối đa 150 thao tác / phiên
+  let started = false, lastKey = '', lastAt = 0;
+  const queue = [], typed = new Set();
+
+  function send(e, d) {
+    const sid = store.get('sid'); if (!sid) return;
+    const n = (store.get('act_n') || 0) + 1; if (n > MAX) return; store.set('act_n', n);
+    const body = { s: sid, t: { '.sv': 'timestamp' }, e };
+    if (d) body.d = String(d).slice(0, 80);
+    fetch(base + '/activity.json', { method: 'POST', body: JSON.stringify(body), keepalive: true }).catch(() => {});
+  }
+  function log(e, d) {
+    d = d == null ? '' : d;
+    const key = e + '|' + d, now = Date.now();
+    if (key === lastKey && now - lastAt < 1500) { lastAt = now; return; }   // chống lặp do bấm/tick liên tục
+    lastKey = key; lastAt = now;
+    if (started) send(e, d); else if (queue.length < 20) queue.push([e, d]);
+  }
+
+  const T = el => (el.textContent || '').trim().slice(0, 60);
+  const CLICKS = [
+    ['.mode', b => ['tab', b.dataset.mode]],
+    ['.tier', b => ['tier', fmtMoney(+b.dataset.amount) + 'đ · ' + tierLen(+b.dataset.amount)]],
+    ['.amt', b => ['amount', fmtMoney(+b.dataset.amount) + 'đ']],
+    ['#tabBank', () => ['paytab', 'bank']],
+    ['#tabMomo', () => ['paytab', 'momo']],
+    ['.copy-btn', b => ['copy', b.dataset.copy]],
+    ['#paidBtn', () => ['paidclick']],
+    ['#renewBtn', () => ['renew']],
+    ['#backEdit', () => ['back']],
+    ['#newReq', () => ['newreq']],
+    ['#tiktokLink', () => ['tiktok']],
+    ['#rateNow', () => ['ratenow']],
+    ['.rv-star', b => ['rvpick', ([...b.parentNode.children].indexOf(b) + 1) + ' sao']],
+    ['#rvSubmit', () => ['rvsubmit', $$('#rvPick .rv-star.on').length + ' sao']],
+    ['#rvDel', () => ['rvdel']],
+    ['.rv-row', b => ['rvfilter', b.dataset.star + ' sao']],
+    ['.lib-dl', b => {
+      const l = b.getAttribute('aria-label') || '', li = b.closest('li'), p = li && li.querySelector('p');
+      return [/^Xem/.test(l) ? 'libplay' : /^Tải/.test(l) ? 'libdl' : 'libopen', l.replace(/^[^:]*:\s*/, '') || (p ? T(p) : '')];
+    }],
+    ['#plOpen', () => ['libopen', T($('#plTitle'))]]
+  ];
+  document.addEventListener('click', ev => {
+    const t = ev.target instanceof Element ? ev.target : null; if (!t) return;
+    for (const [sel, fn] of CLICKS) { const b = t.closest(sel); if (b) { const r = fn(b); log(r[0], r[1]); return; } }
+    const a = t.closest('a[href]');   // link ra ngoài trang
+    if (a) { try { const u = new URL(a.href, location.href); if (/^https?:$/.test(u.protocol) && u.host !== location.host) log('outlink', u.hostname); } catch {} }
+  }, true);
+
+  const TYPE_IDS = ['userName', 'topic', 'link', 'donMsg', 'customAmount', 'rvName', 'rvText', 'libSearch'];
+  let amtT, libT;
+  document.addEventListener('input', ev => {
+    const id = ev.target && ev.target.id; if (!id) return;
+    if (TYPE_IDS.includes(id) && !typed.has(id)) { typed.add(id); log('typing', id); }   // chỉ ghi "đã bắt đầu nhập ô nào", không ghi nội dung
+    if (id === 'customAmount') { clearTimeout(amtT); amtT = setTimeout(() => { if (amount > 0) log('amount', fmtMoney(amount) + 'đ (nhập tay)'); }, 1500); }
+    if (id === 'libSearch') { clearTimeout(libT); libT = setTimeout(() => { const q = $('#libSearch').value.trim(); if (q) log('libsearch', q.slice(0, 40)); }, 1500); }
+  }, true);
+  document.addEventListener('change', ev => {
+    const t = ev.target; if (!t) return;
+    if (t.name === 'category') log('category', t.value);
+    else if (t.id === 'anon') log('anon', t.checked ? 'bật' : 'tắt');
+    else if (t.id === 'agree') log('agree', t.checked ? 'tick' : 'bỏ tick');
+  }, true);
+
+  function watchSections() {   // khách đã cuộn tới mục nào
+    if (!('IntersectionObserver' in window)) return;
+    const io = new IntersectionObserver(es => es.forEach(en => { if (en.isIntersecting) { log('section', en.target.dataset.act); io.unobserve(en.target); } }), { threshold: 0.2 });
+    [['#viewSupporters', 'sup'], ['#viewReviews', 'rev'], ['#viewLibrary', 'lib']].forEach(([s, k]) => { const el = $(s); if (el) { el.dataset.act = k; io.observe(el); } });
+  }
+  function start() {
+    if (started) return; started = true;
+    if (!store.get('act_open')) {   // 1 lần / phiên
+      store.set('act_open', 1);
+      let ref = ''; try { ref = document.referrer ? new URL(document.referrer).hostname.replace(/^www\./, '') : ''; } catch {}
+      send('open', (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? 'điện thoại' : 'máy tính') + ' · ' + (ref && ref !== location.hostname ? ref : 'truy cập trực tiếp'));
+    }
+    queue.splice(0).forEach(([e, d]) => send(e, d));
+    watchSections();
+    window.addEventListener('pagehide', () => send('leave', Math.round((Date.now() - t0) / 1000) + ' giây'));
+  }
+  return { start, log };
 })();
 
 const runUserPreview = attachPreview($('#userName'));
@@ -1360,7 +1457,7 @@ async function applyRemoteConfig() {
 }
 buildTiers(); setMode('donate'); applyRemoteConfig(); loadSupporters(); Reviews.init(); Library.init();
 route();
-Stats.start();
+Stats.start(); Activity.start();
 </script>
 </body>
 </html>

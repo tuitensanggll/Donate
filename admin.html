@@ -58,6 +58,18 @@
   .mr{display:grid;grid-template-columns:64px 1fr 96px;gap:8px;align-items:center;font-size:.8rem;margin-top:6px}
   .mr span:last-child{text-align:right}
   .lbl{display:block;color:var(--mut);font-size:.8rem;margin:10px 0 4px}
+
+  ul.evs{gap:0}
+  .ev{display:grid;grid-template-columns:58px 1fr;gap:8px;padding:7px 4px;border-bottom:1px solid rgba(255,255,255,.06);font-size:.85rem;border-radius:6px;transition:background .6s}
+  .ev.new{background:rgba(255,230,0,.1)}
+  .ev .tm{color:var(--mut);font-variant-numeric:tabular-nums;font-size:.72rem;padding-top:3px}
+  .sid{cursor:pointer;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.74rem;padding:1px 7px;border-radius:9999px;border:1px solid var(--line);margin-right:6px;white-space:nowrap;display:inline-block;background:transparent}
+  .sid:hover{background:rgba(255,255,255,.08)}
+  .cat{display:inline-block;font-size:.66rem;padding:0 7px;border-radius:9999px;margin-right:6px;border:1px solid currentColor;white-space:nowrap}
+  .fr{display:grid;grid-template-columns:minmax(120px,190px) 1fr 84px;gap:8px;align-items:center;font-size:.8rem;margin-top:6px}
+  .fr span:last-child{text-align:right}
+  .fr .bar{background:var(--red)}
+  .sub{font-size:.9rem;margin:18px 0 8px}
 </style>
 </head>
 <body>
@@ -81,7 +93,7 @@
     </div>
 
     <nav class="tabs" id="nav" aria-label="Mục quản trị">
-      <button type="button" data-go="ung">Ủng hộ</button><button type="button" data-go="tk">Thống kê</button><button type="button" data-go="lib">Kho tư liệu</button><button type="button" data-go="cfg">Cấu hình</button><button type="button" data-go="khac">Khác</button>
+      <button type="button" data-go="ung">Ủng hộ</button><button type="button" data-go="tk">Thống kê</button><button type="button" data-go="hd">Hoạt động</button><button type="button" data-go="lib">Kho tư liệu</button><button type="button" data-go="cfg">Cấu hình</button><button type="button" data-go="khac">Khác</button>
     </nav>
 
     <section class="card">
@@ -155,6 +167,36 @@
     </section>
 
     
+    <section class="card" data-p="hd">
+      <div class="top">
+        <h2 style="margin:0">Hoạt động của khách</h2>
+        <div><span id="aDot" class="dot"></span><span id="aStatus" class="mut">Đang kết nối...</span></div>
+      </div>
+      <p class="mut" style="margin:6px 0 0">Mỗi dòng là một thao tác của khách. Khách được đại diện bằng mã phiên ngẫu nhiên (vd <b>#a3f9</b>), không lưu IP và không lưu nội dung họ gõ. Bấm vào mã phiên để xem riêng hành trình của người đó.</p>
+      <div class="stats" id="aStats"></div>
+
+      <h2 class="sub">Đang online (<span id="aOnN">0</span>)</h2>
+      <ul id="aOnline"></ul>
+      <p id="aOnEmpty" class="mut" style="text-align:center;margin:10px 0">Hiện không có ai online.</p>
+
+      <h2 class="sub">Phễu hôm nay (tính theo phiên truy cập)</h2>
+      <div id="aFunnel"></div>
+      <p id="aNote" class="mut" style="margin:8px 0 0"></p>
+
+      <div class="top" style="margin-top:18px">
+        <h2 class="sub" style="margin:0">Nhật ký thao tác</h2>
+        <button id="aSidClear" type="button" class="hidden"></button>
+      </div>
+      <div class="tabs" id="aCats" style="flex-wrap:wrap;margin:8px 0">
+        <button type="button" data-c="" class="on">Tất cả</button><button type="button" data-c="o">Đặt / ủng hộ</button><button type="button" data-c="p">Thanh toán</button><button type="button" data-c="l">Tư liệu</button><button type="button" data-c="r">Đánh giá</button><button type="button" data-c="v">Truy cập</button>
+      </div>
+      <ul id="aFeed" class="evs"></ul>
+      <p id="aEmpty" class="mut" style="text-align:center;margin:18px 0">Chưa có thao tác nào được ghi.</p>
+      <button id="aMore" type="button" class="hidden" style="width:100%;margin-top:8px">Xem thêm</button>
+      <div class="row" style="margin-top:14px"><button id="aClean" type="button">Dọn nhật ký cũ hơn 7 ngày</button><button id="aWipe" type="button" class="del">Xoá toàn bộ nhật ký</button></div>
+      <div id="aMsg" class="mut" style="margin-top:8px;min-height:1.2em"></div>
+    </section>
+
     <section class="card" data-p="tk">
       <h2>Thống kê tiền ủng hộ</h2>
       <div class="stats" id="mStats"></div>
@@ -513,7 +555,7 @@ $('#dl').onclick = async () => {
 
 /* ---------- Thống kê truy cập realtime: /presence + /stats ---------- */
 const ONLINE_MS = 70000;   // coi là online nếu có nhịp tim trong 70 giây (trang gửi mỗi 20 giây)
-const live = { presence: {}, stats: {} }, vStreams = {};
+const live = { presence: {}, stats: {}, activity: {} }, vStreams = {};
 let vTimer = null, vN = 0;
 function setPath(obj, path, data) {
   const seg = path.split('/').filter(Boolean);
@@ -533,16 +575,24 @@ function drawVisitors() {
 }
 function watch(name) {
   if (vStreams[name]) vStreams[name].close();
+  const act = name === 'activity', dot = act ? '#aDot' : '#vDot', stx = act ? '#aStatus' : '#vStatus', redraw = act ? schedAct : drawVisitors;
   token().then(t => {
-    const s = vStreams[name] = new EventSource(DB + '/' + name + '.json?auth=' + encodeURIComponent(t));
-    s.onopen = () => { $('#vDot').className = 'dot on'; $('#vStatus').textContent = 'Realtime'; };
-    s.addEventListener('put', e => { try { const m = JSON.parse(e.data); live[name] = setPath(live[name], m.path, m.data); drawVisitors(); } catch {} });
+    // /activity chỉ lấy 500 thao tác mới nhất để nhẹ máy
+    const s = vStreams[name] = new EventSource(DB + '/' + name + '.json?auth=' + encodeURIComponent(t) + (act ? '&orderBy=%22%24key%22&limitToLast=500' : ''));
+    s.onopen = () => { $(dot).className = 'dot on'; $(stx).textContent = 'Realtime'; };
+    s.addEventListener('put', e => {
+      try {
+        const m = JSON.parse(e.data); live[name] = setPath(live[name], m.path, m.data);
+        if (act) { if (m.path === '/') aInit = true; else if (aInit && m.data) { const k = m.path.split('/').filter(Boolean)[0]; if (k) arrived[k] = Date.now(); } }
+        redraw();
+      } catch {}
+    });
     s.addEventListener('patch', e => {
-      try { const m = JSON.parse(e.data); Object.entries(m.data || {}).forEach(([k, v]) => { live[name] = setPath(live[name], (m.path === '/' ? '' : m.path) + '/' + k, v); }); drawVisitors(); } catch {}
+      try { const m = JSON.parse(e.data); Object.entries(m.data || {}).forEach(([k, v]) => { live[name] = setPath(live[name], (m.path === '/' ? '' : m.path) + '/' + k, v); }); redraw(); } catch {}
     });
     s.addEventListener('auth_revoked', () => setTimeout(() => watch(name), 500));
-    s.addEventListener('cancel', () => { s.close(); $('#vDot').className = 'dot bad'; $('#vStatus').textContent = 'Không có quyền đọc thống kê (kiểm tra Rules).'; });
-    s.onerror = () => { $('#vDot').className = 'dot bad'; $('#vStatus').textContent = 'Mất kết nối, đang thử lại...'; if (s.readyState === 2) setTimeout(() => watch(name), 3000); };
+    s.addEventListener('cancel', () => { s.close(); $(dot).className = 'dot bad'; $(stx).textContent = act ? 'Chưa có quyền đọc /activity. Hãy thêm Rules cho "activity" (xem hướng dẫn).' : 'Không có quyền đọc thống kê (kiểm tra Rules).'; });
+    s.onerror = () => { $(dot).className = 'dot bad'; $(stx).textContent = 'Mất kết nối, đang thử lại...'; if (s.readyState === 2) setTimeout(() => watch(name), 3000); };
   }).catch(() => {});
 }
 async function cleanPresence() {   // xoá các phiên cũ hơn 10 phút (tab bị tắt đột ngột)
@@ -550,11 +600,128 @@ async function cleanPresence() {   // xoá các phiên cũ hơn 10 phút (tab b�
   Object.entries(live.presence).forEach(([k, v]) => { if (!v || (+v.t || 0) < cut) dead[k] = null; });
   if (Object.keys(dead).length) { try { await db('PATCH', 'presence', dead); } catch {} }
 }
-function watchVisitors() { watch('presence'); watch('stats'); }
+function watchVisitors() { watch('presence'); watch('stats'); watch('activity'); }
 function stopVisitors() {
   Object.keys(vStreams).forEach(k => { vStreams[k].close(); delete vStreams[k]; });
-  clearInterval(vTimer); live.presence = {}; live.stats = {};
+  clearInterval(vTimer); live.presence = {}; live.stats = {}; live.activity = {}; aInit = false;
 }
+
+/* ---------- Nhật ký hoạt động: /activity ---------- */
+// Dữ liệu do khách (ai cũng ghi được) gửi lên => luôn hiển thị bằng textContent, không dùng innerHTML.
+const EV = {   // mã sự kiện: [tên hiển thị, nhóm]
+  open: ['Mở trang web', 'v'], view: ['Chuyển sang bước', 'v'], section: ['Cuộn tới mục', 'v'], leave: ['Rời trang sau', 'v'], outlink: ['Bấm link ra ngoài', 'v'], tiktok: ['Bấm "Xem kênh TikTok"', 'v'],
+  tab: ['Chọn hình thức', 'o'], category: ['Chọn thể loại', 'o'], tier: ['Chọn gói video', 'o'], amount: ['Chọn số tiền', 'o'], anon: ['Ghi nhận ẩn danh', 'o'], typing: ['Bắt đầu nhập', 'o'], invalid: ['Điền thiếu / sai', 'o'],
+  topay: ['Bấm "Tiếp tục thanh toán"', 'p'], paytab: ['Chọn cách chuyển', 'p'], copy: ['Sao chép', 'p'], agree: ['Xác nhận đã chuyển khoản', 'p'], paidclick: ['Bấm "Tôi đã chuyển khoản"', 'p'],
+  submitted: ['Gửi thành công', 'p'], expired: ['Đơn hết hạn', 'p'], renew: ['Tạo lại đơn', 'p'], back: ['Quay lại chỉnh sửa', 'p'], newreq: ['Gửi yêu cầu khác', 'p'],
+  libplay: ['Xem tư liệu', 'l'], libdl: ['Tải tư liệu', 'l'], libopen: ['Mở link tư liệu', 'l'], libsearch: ['Tìm tư liệu', 'l'],
+  ratenow: ['Bấm "Đánh giá trải nghiệm"', 'r'], rvpick: ['Chọn số sao', 'r'], rvsubmit: ['Bấm gửi đánh giá', 'r'], rvdel: ['Bấm xoá đánh giá', 'r'], rvfilter: ['Lọc đánh giá', 'r']
+};
+const CAT = { v: ['Truy cập', '#9ca3af'], o: ['Đặt / ủng hộ', '#60a5fa'], p: ['Thanh toán', '#FFE600'], l: ['Tư liệu', '#34d399'], r: ['Đánh giá', '#f472b6'] };
+const FIELD = { userName: 'ô TikTok ID', topic: 'ô chủ đề', link: 'ô link tham khảo', donMsg: 'ô lời nhắn', customAmount: 'ô số tiền khác', tierBox: 'chưa chọn gói video', rvName: 'ô tên đánh giá', rvText: 'ô nội dung đánh giá', libSearch: 'ô tìm tư liệu' };
+const DMAP = {
+  view: { info: 'Điền thông tin', pay: 'Thanh toán', done: 'Hoàn tất' }, tab: { donate: 'Ủng hộ kênh', video: 'Đặt video theo yêu cầu' },
+  paytab: { bank: 'Ngân hàng', momo: 'MoMo' }, copy: { bank: 'số tài khoản', momo: 'số MoMo', note: 'nội dung chuyển khoản', amount: 'số tiền' },
+  section: { sup: 'Danh sách ghi nhận', rev: 'Xếp hạng & đánh giá', lib: 'Kho tư liệu' }, typing: FIELD, invalid: FIELD
+};
+let aCat = '', aSid = '', aShown = 120, aInit = false, aTimer = 0;
+const arrived = {};
+const evLabel = x => { let d = x.d || ''; const m = DMAP[x.e]; if (m && m[d]) d = m[d]; return [(EV[x.e] || [x.e])[0], d]; };
+const sidHue = s => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+function sidChip(s) {
+  const b = document.createElement('span'); b.className = 'sid'; b.textContent = '#' + s.slice(-4); b.title = 'Xem riêng phiên này';
+  const c = 'hsl(' + sidHue(s) + ',65%,62%)'; b.style.color = c; b.style.borderColor = c;
+  b.onclick = () => { aSid = s; aShown = 120; drawActivity(); };
+  return b;
+}
+function actList() {
+  return Object.entries(live.activity || {}).filter(([, v]) => v && typeof v === 'object' && v.e)
+    .map(([k, v]) => ({ k, s: String(v.s || ''), t: +v.t || 0, e: String(v.e), d: String(v.d || '') }))
+    .sort((a, b) => b.t - a.t || (a.k < b.k ? 1 : -1));
+}
+function schedAct() { if (aTimer) return; aTimer = setTimeout(() => { aTimer = 0; drawActivity(); }, 250); }
+function fmtT(t, day0) {
+  const d = new Date(t), p = n => String(n).padStart(2, '0'), hm = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  return t >= day0 ? hm : p(d.getDate()) + '/' + p(d.getMonth() + 1) + ' ' + hm.slice(0, 5);
+}
+function drawActivity() {
+  const feed = $('#aFeed'); if (!feed) return;
+  const all = actList(), now = Date.now(), day0 = new Date().setHours(0, 0, 0, 0), today = all.filter(x => x.t >= day0);
+  const by = {};   // gom theo phiên (duyệt từ cũ -> mới)
+  for (let i = all.length - 1; i >= 0; i--) { const x = all[i], o = by[x.s] || (by[x.s] = { last: x, dev: '', view: '' }); o.last = x; if (x.e === 'open') o.dev = x.d; if (x.e === 'view') o.view = x.d; }
+
+  // phễu + số liệu nhanh
+  const cnt = fn => { const set = new Set(); today.forEach(x => { if (fn(x)) set.add(x.s); }); return set.size; };
+  const st = [
+    ['Vào trang', cnt(() => true)], ['Chọn gói / số tiền', cnt(x => x.e === 'tier' || x.e === 'amount')], ['Bấm "Tiếp tục thanh toán"', cnt(x => x.e === 'topay')],
+    ['Sao chép / tick xác nhận', cnt(x => x.e === 'copy' || x.e === 'agree')], ['Bấm "Tôi đã chuyển khoản"', cnt(x => x.e === 'paidclick')], ['Hoàn tất', cnt(x => x.e === 'submitted')]
+  ];
+  const tile = (v, l, big) => `<div class="st${big ? ' big' : ''}"><b>${v}</b><span>${l}</span></div>`;
+  $('#aStats').innerHTML = tile(fmt(today.length), 'Thao tác hôm nay', 1) + tile(fmt(st[0][1]), 'Phiên hôm nay') + tile(fmt(cnt(x => x.e === 'view' && x.d === 'pay')), 'Vào bước thanh toán') + tile(fmt(st[5][1]), 'Gửi thành công');
+  const top = Math.max(1, st[0][1]);
+  $('#aFunnel').innerHTML = st.map(([l, n], i) => {
+    const pr = i ? st[i - 1][1] : 0, pct = i && pr ? ' · ' + Math.round(n / pr * 100) + '%' : '';
+    return `<div class="fr"><span>${l}</span><div><div class="bar" style="width:${Math.round(n / top * 100)}%"></div></div><span>${n}${pct}</span></div>`;
+  }).join('');
+  $('#aNote').textContent = all.length >= 500 ? 'Đang xét 500 thao tác gần nhất, số liệu phễu chỉ tính trong phạm vi này.' : '';
+
+  // đang online (theo nhịp tim /presence)
+  const on = Object.entries(live.presence || {}).filter(([, v]) => v && now - (+v.t || 0) < ONLINE_MS).map(([s]) => s)
+    .sort((a, b) => ((by[b] && by[b].last.t) || 0) - ((by[a] && by[a].last.t) || 0));
+  $('#aOnN').textContent = on.length; $('#aOnEmpty').classList.toggle('hidden', on.length > 0);
+  const ol = $('#aOnline'); ol.innerHTML = '';
+  on.forEach(s => {
+    const o = by[s], li = document.createElement('li'); li.className = 'it';
+    const m = document.createElement('div'), n = document.createElement('div'), sub = document.createElement('div');
+    m.className = 'm'; n.className = 'n'; sub.className = 's';
+    n.append(sidChip(s), document.createTextNode(o && o.view ? 'Đang ở: ' + (DMAP.view[o.view] || o.view) : 'Đang xem trang'));
+    sub.textContent = o ? [o.dev, 'thao tác cuối: ' + evLabel(o.last).filter(Boolean).join(' · '), ago(o.last.t)].filter(Boolean).join(' · ') : 'Chưa có thao tác nào được ghi';
+    m.append(n, sub); li.appendChild(m); ol.appendChild(li);
+  });
+
+  // nhật ký
+  let rows = all.filter(x => (!aCat || (EV[x.e] || ['', 'v'])[1] === aCat) && (!aSid || x.s === aSid));
+  if (aSid) rows = rows.slice().reverse();   // xem 1 phiên: đọc từ trên xuống theo thứ tự thời gian
+  const clr = $('#aSidClear'); clr.classList.toggle('hidden', !aSid);
+  if (aSid) clr.textContent = 'Đang xem phiên #' + aSid.slice(-4) + ' ✕ bỏ lọc';
+  $('#aEmpty').classList.toggle('hidden', rows.length > 0); $('#aMore').classList.toggle('hidden', rows.length <= aShown);
+  feed.innerHTML = '';
+  let fresh = false;
+  rows.slice(0, aShown).forEach(x => {
+    const isNew = arrived[x.k] && now - arrived[x.k] < 5000; if (isNew) fresh = true;
+    const li = document.createElement('li'); li.className = 'ev' + (isNew ? ' new' : '');
+    const tm = document.createElement('span'); tm.className = 'tm'; tm.textContent = fmtT(x.t, day0);
+    const body = document.createElement('div'), cat = CAT[(EV[x.e] || ['', 'v'])[1]], ct = document.createElement('span'), lb = evLabel(x), b = document.createElement('b');
+    ct.className = 'cat'; ct.textContent = cat[0]; ct.style.color = cat[1]; b.textContent = lb[0];
+    body.append(sidChip(x.s), ct, b);
+    if (lb[1]) { const d = document.createElement('span'); d.className = 'mut'; d.textContent = ' · ' + lb[1]; body.appendChild(d); }
+    li.append(tm, body); feed.appendChild(li);
+  });
+  Object.keys(arrived).forEach(k => { if (now - arrived[k] > 60000) delete arrived[k]; });
+  if (fresh) setTimeout(schedAct, 5200);   // bỏ tô sáng dòng mới
+}
+$$('#aCats button').forEach(b => b.onclick = () => { aCat = b.dataset.c; aShown = 120; $$('#aCats button').forEach(x => x.classList.toggle('on', x === b)); drawActivity(); });
+$('#aSidClear').onclick = () => { aSid = ''; drawActivity(); };
+$('#aMore').onclick = () => { aShown += 120; drawActivity(); };
+
+async function cleanActivity(days, silent) {   // xoá thao tác cũ hơn N ngày (cần ".indexOn": ["t"] trong Rules)
+  const cut = Date.now() - days * 86400000, msg = $('#aMsg'); let removed = 0;
+  try {
+    for (let i = 0; i < 20; i++) {
+      const r = await fetch(DB + '/activity.json?auth=' + encodeURIComponent(await token()) + '&orderBy=%22t%22&endAt=' + cut + '&limitToFirst=500');
+      if (!r.ok) throw new Error(r.status === 400 ? 'thiếu ".indexOn": ["t"] cho activity trong Rules' : 'HTTP ' + r.status);
+      const j = await r.json(), keys = j ? Object.keys(j) : []; if (!keys.length) break;
+      const p = {}; keys.forEach(k => p[k] = null); await db('PATCH', 'activity', p); removed += keys.length;
+      if (keys.length < 500) break;
+    }
+    if (!silent) msg.textContent = removed ? 'Đã xoá ' + removed + ' thao tác cũ.' : 'Không có thao tác nào cũ hơn ' + days + ' ngày.';
+  } catch (e) { if (!silent) msg.textContent = 'Không dọn được: ' + e.message; }
+}
+function autoCleanActivity() { if (ls.get('ari_act_clean') === localToday()) return; ls.set('ari_act_clean', localToday()); cleanActivity(7, true); }
+$('#aClean').onclick = async () => { const b = $('#aClean'); b.disabled = true; $('#aMsg').textContent = 'Đang dọn...'; await cleanActivity(7, false); b.disabled = false; };
+$('#aWipe').onclick = async () => {
+  if (!confirm('Xoá TOÀN BỘ nhật ký thao tác? Không thể khôi phục.')) return;
+  try { await db('DELETE', 'activity'); live.activity = {}; drawActivity(); $('#aMsg').textContent = 'Đã xoá toàn bộ nhật ký.'; } catch (e) { $('#aMsg').textContent = 'Không xoá được: ' + (e.message === 'denied' ? 'không có quyền ghi (kiểm tra Rules).' : e.message); }
+};
 
 /* ---------- Đánh giá (xem thống kê + xoá spam) ---------- */
 let revs = {};
@@ -659,7 +826,8 @@ function enter() {
   tab = 'P'; seen = null; orders = {}; newKeys = new Set(); syncNotifyBtn(); draw();
   setStatus('', 'Đang kết nối...');
   go(ls.get('ari_panel') || 'ung'); loadLib(); loadCfg(); connect(); loadSupporters(); loadReviews(); watchVisitors(); drawVisitors();
-  clearInterval(vTimer); vTimer = setInterval(() => { drawVisitors(); if (++vN % 12 === 0) cleanPresence(); }, 10000);
+  ls.set('ari_owner', '1'); autoCleanActivity();   // đánh dấu trình duyệt admin để trang khách không ghi thao tác của bạn
+  clearInterval(vTimer); vTimer = setInterval(() => { drawVisitors(); drawActivity(); if (++vN % 12 === 0) cleanPresence(); }, 10000);
   clearInterval(refreshTimer); refreshTimer = setInterval(() => { connect(); watchVisitors(); }, 45 * 60 * 1000);   // làm mới token định kỳ
 }
 if (!FIREBASE.apiKey || !DB) showLogin();
